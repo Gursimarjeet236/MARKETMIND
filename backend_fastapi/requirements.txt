@@ -1,0 +1,24 @@
+fastapi
+uvicorn
+pydantic
+python-dotenv
+aiosqlite
+langgraph
+langgraph-checkpoint-sqlite
+langchain-huggingface
+langchain-core
+langchain-groq
+duckduckgo-search
+ddgs
+httpx
+passlib[argon2]
+
+# ML / Prediction dependencies
+tensorflow-cpu
+numpy
+pandas
+scikit-learn
+vmdpy
+yfinance
+fastdtw
+scipy
