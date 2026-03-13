@@ -1,0 +1,65 @@
+services:
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile.frontend
+    ports:
+      - "3000:80"
+    depends_on:
+      - auth-api-svc
+      - ml-api-svc
+    networks:
+      - marketmind-net
+
+  auth-api-svc:
+    build:
+      context: ./server
+      dockerfile: Dockerfile
+    # Exposing purely for local dev without Nginx if needed
+    ports:
+      - "3001:3000"
+    env_file:
+      - ./.env
+    networks:
+      - marketmind-net
+
+  ml-api-svc:
+    build:
+      context: ./backend_fastapi
+      dockerfile: Dockerfile
+    # Exposing purely for local dev without Nginx if needed
+    ports:
+      - "9000:9000"
+    env_file:
+      - ./backend_fastapi/.env
+    volumes:
+      # Mount the local models directory
+      - ./backend_fastapi/models:/app/models
+    environment:
+      - MODEL_DIR=/app/models
+      # Update with postgres URL in production
+      - DATABASE_URL=postgres://postgres:postgres@postgres:5432/marketmind
+    depends_on:
+      - postgres
+    networks:
+      - marketmind-net
+
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: marketmind
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    networks:
+      - marketmind-net
+
+networks:
+  marketmind-net:
+    driver: bridge
+
+volumes:
+  pgdata:

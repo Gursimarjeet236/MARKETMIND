@@ -7,8 +7,8 @@ from dotenv import load_dotenv
 import uuid
 import asyncio
 import os
-import aiosqlite
-from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver
+from psycopg_pool import AsyncConnectionPool
+from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
 from datetime import datetime
 import time
 import httpx
@@ -49,47 +49,55 @@ app.add_middleware(
 # Application State Setup
 @app.on_event("startup")
 async def startup_event():
-    os.makedirs("data", exist_ok=True)
-    db_path = "data/memory.sqlite"
-    # Create persistent connection
-    app.state.db_conn = await aiosqlite.connect(db_path)
-    # Initialize Checkpointer with the connection
-    memory = AsyncSqliteSaver(app.state.db_conn)
+    # Use environment variable for database connection
+    db_url = os.getenv("DATABASE_URL", "postgres://postgres:postgres@localhost:5432/marketmind")
+    
+    # Create persistent connection pool
+    app.state.db_pool = AsyncConnectionPool(
+        conninfo=db_url,
+        max_size=20,
+        kwargs={"autocommit": True}
+    )
+    
+    # Initialize Checkpointer
+    # LangGraph Postgres Saver requires a connection string or pool object
+    memory = AsyncPostgresSaver(app.state.db_pool)
+    await memory.setup() # create checkpoint tables
+    
     # Initialize Agent
     app.state.agent = get_agent(checkpointer=memory)
-    print("Agent initialized with AsyncSqliteSaver")
+    print("Agent initialized with AsyncPostgresSaver")
     
-    # Initialize Users Table
-    await app.state.db_conn.execute("""
-        CREATE TABLE IF NOT EXISTS users (
-            id TEXT PRIMARY KEY,
-            email TEXT UNIQUE,
-            password_hash TEXT,
-            name TEXT,
-            avatar TEXT,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        )
-    """)
-    
-    # Initialize Threads Table for Metadata
-    await app.state.db_conn.execute("""
-        CREATE TABLE IF NOT EXISTS threads (
-            id TEXT PRIMARY KEY,
-            title TEXT,
-            user_id TEXT,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        )
-    """)
-    
-    await app.state.db_conn.commit()
+    # Initialize Custom Tables (Users, Threads)
+    async with app.state.db_pool.connection() as conn:
+        await conn.execute("""
+            CREATE TABLE IF NOT EXISTS users (
+                id TEXT PRIMARY KEY,
+                email TEXT UNIQUE,
+                password_hash TEXT,
+                name TEXT,
+                avatar TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+        
+        await conn.execute("""
+            CREATE TABLE IF NOT EXISTS threads (
+                id TEXT PRIMARY KEY,
+                title TEXT,
+                user_id TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+        
     print("Database tables initialized")
 
 @app.on_event("shutdown")
 async def shutdown_event():
-    if hasattr(app.state, "db_conn"):
-        await app.state.db_conn.close()
-        print("DB connection closed")
+    if hasattr(app.state, "db_pool"):
+        await app.state.db_pool.close()
+        print("DB pool closed")
 
 class ChatRequest(BaseModel):
     message: str
@@ -128,32 +136,31 @@ async def get_history(thread_id: str):
 @app.get("/threads")
 async def get_threads(user_id: Optional[str] = None):
     try:
-        db = app.state.db_conn
-        # Filter by user_id so each user only sees their own threads
         if not user_id:
             return {"threads": []}
-        async with db.execute(
-            "SELECT id, title, created_at FROM threads WHERE user_id = ? ORDER BY updated_at DESC",
-            (user_id,)
-        ) as cursor:
-            rows = await cursor.fetchall()
-            threads = [{"id": row[0], "title": row[1] or "New Chat", "created_at": row[2]} for row in rows]
-            return {"threads": threads}
+            
+        async with app.state.db_pool.connection() as conn:
+            async with conn.cursor() as cursor:
+                # PostgreSQL uses %s instead of ? for parameter binding
+                await cursor.execute(
+                    "SELECT id, title, created_at FROM threads WHERE user_id = %s ORDER BY updated_at DESC",
+                    (user_id,)
+                )
+                rows = await cursor.fetchall()
+                # Ensure we handle datetime objects correctly if psycopg returns them
+                threads = [{"id": row[0], "title": row[1] or "New Chat", "created_at": str(row[2])} for row in rows]
+                return {"threads": threads}
     except Exception as e:
+        import traceback
+        traceback.print_exc()
         print(f"Error fetching threads: {e}")
         return {"threads": []}
 
 @app.delete("/threads/{thread_id}")
 async def delete_thread(thread_id: str):
     try:
-        db = app.state.db_conn
-        # Delete metadata
-        await db.execute("DELETE FROM threads WHERE id = ?", (thread_id,))
-        # Delete checkpoints (this is a bit hacky as langgraph manages this, but for sqlite we can do it)
-        # Note: LangGraph's AsyncSqliteSaver uses 'checkpoints' and 'writes' tables.
-        # We try to clean up if possible, but exact schema dependency is risky.
-        # For now, just removing from metadata hides it from the UI.
-        await db.commit()
+        async with app.state.db_pool.connection() as conn:
+            await conn.execute("DELETE FROM threads WHERE id = %s", (thread_id,))
         return {"status": "Thread deleted"}
     except Exception as e:
         print(f"Error deleting thread: {e}")
@@ -162,9 +169,8 @@ async def delete_thread(thread_id: str):
 @app.patch("/threads/{thread_id}")
 async def update_thread(thread_id: str, update: ThreadUpdate):
     try:
-        db = app.state.db_conn
-        await db.execute("UPDATE threads SET title = ? WHERE id = ?", (update.title, thread_id))
-        await db.commit()
+        async with app.state.db_pool.connection() as conn:
+            await conn.execute("UPDATE threads SET title = %s WHERE id = %s", (update.title, thread_id))
         return {"status": "Thread updated"}
     except Exception as e:
         print(f"Error updating thread: {e}")
@@ -173,10 +179,9 @@ async def update_thread(thread_id: str, update: ThreadUpdate):
 @app.delete("/history")
 async def clear_all_history():
     try:
-        db = app.state.db_conn
-        await db.execute("DELETE FROM checkpoints")
-        await db.execute("DELETE FROM threads")
-        await db.commit()
+        async with app.state.db_pool.connection() as conn:
+            await conn.execute("DELETE FROM checkpoints")
+            await conn.execute("DELETE FROM threads")
         return {"status": "History cleared"}
     except Exception as e:
         print(f"Error clearing history: {e}")
@@ -201,23 +206,22 @@ class GoogleProfile(BaseModel):
 
 @app.post("/auth/signup")
 async def signup(user: UserRegister):
-    db = app.state.db_conn
-    
-    # Check if user exists
-    async with db.execute("SELECT id FROM users WHERE email = ?", (user.email,)) as cursor:
-        existing = await cursor.fetchone()
-        if existing:
-            raise HTTPException(status_code=400, detail="Email already registered")
-    
-    # Create user
-    user_id = str(uuid.uuid4())
-    hashed_pw = get_password_hash(user.password)
-    
-    await db.execute(
-        "INSERT INTO users (id, email, password_hash, name) VALUES (?, ?, ?, ?)",
-        (user_id, user.email, hashed_pw, user.name)
-    )
-    await db.commit()
+    async with app.state.db_pool.connection() as conn:
+        async with conn.cursor() as cursor:
+            # Check if user exists
+            await cursor.execute("SELECT id FROM users WHERE email = %s", (user.email,))
+            existing = await cursor.fetchone()
+            if existing:
+                raise HTTPException(status_code=400, detail="Email already registered")
+        
+        # Create user
+        user_id = str(uuid.uuid4())
+        hashed_pw = get_password_hash(user.password)
+        
+        await conn.execute(
+            "INSERT INTO users (id, email, password_hash, name) VALUES (%s, %s, %s, %s)",
+            (user_id, user.email, hashed_pw, user.name)
+        )
     
     return {
         "user": {"id": user_id, "email": user.email, "name": user.name},
@@ -226,52 +230,51 @@ async def signup(user: UserRegister):
 
 @app.post("/auth/signin")
 async def signin(user: UserLogin):
-    db = app.state.db_conn
-    
-    async with db.execute("SELECT id, name, password_hash FROM users WHERE email = ?", (user.email,)) as cursor:
-        row = await cursor.fetchone()
-        if not row:
-            raise HTTPException(status_code=400, detail="Invalid credentials")
-        
-        user_id, name, pw_hash = row
-        
-        # Verify password
-        if not verify_password(user.password, pw_hash):
-            raise HTTPException(status_code=400, detail="Invalid credentials")
+    async with app.state.db_pool.connection() as conn:
+        async with conn.cursor() as cursor:
+            await cursor.execute("SELECT id, name, password_hash FROM users WHERE email = %s", (user.email,))
+            row = await cursor.fetchone()
             
-        return {
-            "user": {"id": user_id, "email": user.email, "name": name},
-            "token": "dummy_token_" + user_id
-        }
+            if not row:
+                raise HTTPException(status_code=400, detail="Invalid credentials")
+            
+            user_id, name, pw_hash = row
+            
+            # Verify password
+            if not verify_password(user.password, pw_hash):
+                raise HTTPException(status_code=400, detail="Invalid credentials")
+                
+            return {
+                "user": {"id": user_id, "email": user.email, "name": name},
+                "token": "dummy_token_" + user_id
+            }
 
 @app.post("/auth/google")
 async def google_auth(profile: GoogleProfile):
-    db = app.state.db_conn
-    
-    # Check if user exists
-    async with db.execute("SELECT id, name FROM users WHERE email = ?", (profile.email,)) as cursor:
-        row = await cursor.fetchone()
-        
-    if row:
-        user_id, name = row
-        return {
-            "user": {"id": user_id, "email": profile.email, "name": name, "avatar": profile.avatar},
-            "token": "dummy_token_" + user_id
-        }
-    else:
-        # Create new user from Google
-        user_id = str(uuid.uuid4())
-        # No password for google users, or dummy
-        await db.execute(
-            "INSERT INTO users (id, email, password_hash, name, avatar) VALUES (?, ?, ?, ?, ?)",
-            (user_id, profile.email, "google_auth", profile.name, profile.avatar)
-        )
-        await db.commit()
-        
-        return {
-            "user": {"id": user_id, "email": profile.email, "name": profile.name, "avatar": profile.avatar},
-            "token": "dummy_token_" + user_id
-        }
+    async with app.state.db_pool.connection() as conn:
+        async with conn.cursor() as cursor:
+            # Check if user exists
+            await cursor.execute("SELECT id, name FROM users WHERE email = %s", (profile.email,))
+            row = await cursor.fetchone()
+            
+            if row:
+                user_id, name = row
+                return {
+                    "user": {"id": user_id, "email": profile.email, "name": name, "avatar": profile.avatar},
+                    "token": "dummy_token_" + user_id
+                }
+            else:
+                # Create new user from Google
+                user_id = str(uuid.uuid4())
+                await conn.execute(
+                    "INSERT INTO users (id, email, password_hash, name, avatar) VALUES (%s, %s, %s, %s, %s)",
+                    (user_id, profile.email, "google_auth", profile.name, profile.avatar)
+                )
+                
+                return {
+                    "user": {"id": user_id, "email": profile.email, "name": profile.name, "avatar": profile.avatar},
+                    "token": "dummy_token_" + user_id
+                }
 
 @app.post("/chat")
 async def chat_endpoint(request: ChatRequest):
@@ -289,28 +292,26 @@ async def chat_endpoint(request: ChatRequest):
         thread_id = str(uuid.uuid4())
         is_new_thread = True
     
-    # Check if thread exists in our metadata table
-    db = app.state.db_conn
-    async with db.execute("SELECT 1 FROM threads WHERE id = ?", (thread_id,)) as cursor:
-        exists = await cursor.fetchone()
-        if not exists:
-            is_new_thread = True
+    async with app.state.db_pool.connection() as conn:
+        async with conn.cursor() as cursor:
+            await cursor.execute("SELECT 1 FROM threads WHERE id = %s", (thread_id,))
+            exists = await cursor.fetchone()
+            if not exists:
+                is_new_thread = True
 
-    if is_new_thread:
-        # Generate a title if it's new (using first few words)
-        title = request.message[:30].strip()
-        if len(request.message) > 30:
-            title += "..."
-        
-        await db.execute(
-            "INSERT INTO threads (id, title, user_id) VALUES (?, ?, ?)",
-            (thread_id, title, request.user_id)
-        )
-        await db.commit()
-    else:
-        # Update updated_at
-        await db.execute("UPDATE threads SET updated_at = CURRENT_TIMESTAMP WHERE id = ?", (thread_id,))
-        await db.commit()
+        if is_new_thread:
+            # Generate a title if it's new (using first few words)
+            title = request.message[:30].strip()
+            if len(request.message) > 30:
+                title += "..."
+            
+            await conn.execute(
+                "INSERT INTO threads (id, title, user_id) VALUES (%s, %s, %s)",
+                (thread_id, title, request.user_id)
+            )
+        else:
+            # Update updated_at
+            await conn.execute("UPDATE threads SET updated_at = CURRENT_TIMESTAMP WHERE id = %s", (thread_id,))
 
     async def event_generator():
         try:

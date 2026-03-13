@@ -1,0 +1,48 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: marketmind-ingress
+  namespace: marketmind
+  annotations:
+    kubernetes.io/ingress.class: alb
+    alb.ingress.kubernetes.io/scheme: internet-facing
+    alb.ingress.kubernetes.io/target-type: ip
+    
+    # --- IMPORTANT CONFIGURATION FOR DOMAIN ---
+    # Uncomment and replace with your actual AWS ACM Certificate ARN for HTTPS
+    # alb.ingress.kubernetes.io/certificate-arn: arn:aws:acm:us-east-1:1234567890:certificate/xxxx-xxxx-xxxx
+    # alb.ingress.kubernetes.io/listen-ports: '[{"HTTP": 80}, {"HTTPS":443}]'
+    # alb.ingress.kubernetes.io/ssl-redirect: '443'
+    
+spec:
+  # If you set up ACM, uncomment the rules below and add your domain
+  rules:
+    # - host: marketmind.yourdomain.com
+    - http:
+        paths:
+          # Match Auth API
+          - path: /api/auth
+            pathType: Prefix
+            backend:
+              service:
+                name: auth-api-svc
+                port:
+                  number: 3000
+          
+          # Match ML API
+          - path: /api/ml
+            pathType: Prefix
+            backend:
+              service:
+                name: ml-api-svc
+                port:
+                  number: 9000
+                  
+          # Catch-all goes to React Frontend
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: frontend-svc
+                port:
+                  number: 80

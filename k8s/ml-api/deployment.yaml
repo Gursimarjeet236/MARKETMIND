@@ -1,0 +1,76 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ml-api
+  namespace: marketmind
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: ml-api
+  template:
+    metadata:
+      labels:
+        app: ml-api
+    spec:
+      serviceAccountName: ml-api-sa
+      # Init container to pull models from S3 directly into the pod before FastAPI starts
+      initContainers:
+        - name: model-downloader
+          image: amazon/aws-cli:latest
+          command: ["aws", "s3", "sync", "s3://marketmind-prod-ml-models/", "/models/"]
+          volumeMounts:
+            - name: model-storage
+              mountPath: /models
+              
+      containers:
+        - name: ml-api
+          image: ${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/marketmind/ml-api:${IMAGE_TAG}
+          ports:
+            - containerPort: 9000
+          env:
+            - name: MODEL_DIR
+              value: /models
+            # - name: DATABASE_URL (To be injected via Secret)
+          resources:
+            requests:
+              cpu: 250m
+              memory: 1Gi
+            limits:
+              cpu: 1000m
+              memory: 2Gi
+          volumeMounts:
+            - name: model-storage
+              mountPath: /app/models
+          livenessProbe:
+            httpGet:
+              path: /
+              port: 9000
+            initialDelaySeconds: 60
+            periodSeconds: 30
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 9000
+            initialDelaySeconds: 45
+            
+      volumes:
+        - name: model-storage
+          emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: ml-api-svc
+  namespace: marketmind
+  annotations:
+    # Important for long-running inference requests
+    alb.ingress.kubernetes.io/backend-protocol: HTTP
+spec:
+  type: ClusterIP
+  ports:
+    - port: 9000
+      targetPort: 9000
+      protocol: TCP
+  selector:
+    app: ml-api

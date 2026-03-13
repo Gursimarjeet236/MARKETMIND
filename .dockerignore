@@ -1,0 +1,10 @@
+node_modules
+venv
+.env
+.env.local
+dist
+__pycache__
+*.pyc
+backend_fastapi/models/
+backend_fastapi/data/
+server/node_modules
