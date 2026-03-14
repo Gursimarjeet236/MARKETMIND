@@ -9,9 +9,16 @@ import asyncio
 import os
 import aiosqlite
 from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver
+try:
+    from psycopg_pool import AsyncConnectionPool
+    from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
+    POSTGRES_AVAILABLE = True
+except ImportError:
+    POSTGRES_AVAILABLE = False
 from datetime import datetime
 import time
 import httpx
+import sys
 
 # Import the factory
 from agent import get_agent
@@ -37,6 +44,16 @@ load_dotenv()
 
 app = FastAPI(title="Edith AI API")
 
+# Use a router for /api namespace to avoid collisions with frontend routes
+router = APIRouter(prefix="/api")
+
+@app.middleware("http")
+async def log_requests(request: Request, call_next):
+    print(f"[Request] {request.method} {request.url.path}")
+    response = await call_next(request)
+    print(f"[Response] {request.method} {request.url.path} - {response.status_code}")
+    return response
+
 # Configure CORS
 app.add_middleware(
     CORSMiddleware,
@@ -49,47 +66,77 @@ app.add_middleware(
 # Application State Setup
 @app.on_event("startup")
 async def startup_event():
-    os.makedirs("data", exist_ok=True)
-    db_path = "data/memory.sqlite"
-    # Create persistent connection
-    app.state.db_conn = await aiosqlite.connect(db_path)
-    # Initialize Checkpointer with the connection
-    memory = AsyncSqliteSaver(app.state.db_conn)
-    # Initialize Agent
-    app.state.agent = get_agent(checkpointer=memory)
-    print("Agent initialized with AsyncSqliteSaver")
-    
-    # Initialize Users Table
-    await app.state.db_conn.execute("""
-        CREATE TABLE IF NOT EXISTS users (
-            id TEXT PRIMARY KEY,
-            email TEXT UNIQUE,
-            password_hash TEXT,
-            name TEXT,
-            avatar TEXT,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        )
-    """)
-    
-    # Initialize Threads Table for Metadata
-    await app.state.db_conn.execute("""
-        CREATE TABLE IF NOT EXISTS threads (
-            id TEXT PRIMARY KEY,
-            title TEXT,
-            user_id TEXT,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        )
-    """)
-    
-    await app.state.db_conn.commit()
-    print("Database tables initialized")
+    try:
+        # 1. Try Postgres (for Vercel/Production persistence)
+        db_url = os.getenv("DATABASE_URL")
+        if POSTGRES_AVAILABLE and db_url:
+            print("[Startup] Connecting to Postgres...")
+            app.state.db_pool = AsyncConnectionPool(
+                conninfo=db_url,
+                max_size=10, 
+                kwargs={"autocommit": True}
+            )
+            # Initialize Postgres Checkpointer
+            memory = AsyncPostgresSaver(app.state.db_pool)
+            await memory.setup() 
+            app.state.agent = get_agent(checkpointer=memory)
+            
+            # Initialize Custom Tables in Postgres
+            async with app.state.db_pool.connection() as conn:
+                await conn.execute("""
+                    CREATE TABLE IF NOT EXISTS users (
+                        id TEXT PRIMARY KEY,
+                        email TEXT UNIQUE,
+                        password_hash TEXT,
+                        name TEXT,
+                        avatar TEXT,
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                    )
+                """)
+                await conn.execute("""
+                    CREATE TABLE IF NOT EXISTS threads (
+                        id TEXT PRIMARY KEY,
+                        title TEXT,
+                        user_id TEXT,
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                    )
+                """)
+            app.state.db_type = "postgres"
+            print("[Startup] Agent initialized with AsyncPostgresSaver")
+            return
+
+        # 2. Fallback to SQLite (for local development)
+        print("[Startup] Falling back to SQLite...")
+        os.makedirs("data", exist_ok=True)
+        db_path = "data/memory.sqlite"
+        app.state.db_conn = await aiosqlite.connect(db_path)
+        memory = AsyncSqliteSaver(app.state.db_conn)
+        app.state.agent = get_agent(checkpointer=memory)
+        
+        # Initialize SQLite Tables
+        await app.state.db_conn.execute("""
+            CREATE TABLE IF NOT EXISTS users (id TEXT PRIMARY KEY, email TEXT UNIQUE, password_hash TEXT, name TEXT, avatar TEXT, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)
+        """)
+        await app.state.db_conn.execute("""
+            CREATE TABLE IF NOT EXISTS threads (id TEXT PRIMARY KEY, title TEXT, user_id TEXT, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)
+        """)
+        await app.state.db_conn.commit()
+        app.state.db_type = "sqlite"
+        print("[Startup] Agent initialized with AsyncSqliteSaver")
+        
+    except Exception as e:
+        print(f"[Startup] ERROR during initialization: {e}")
+        app.state.agent = get_agent(checkpointer=None)
+        app.state.db_type = "none"
 
 @app.on_event("shutdown")
 async def shutdown_event():
-    if hasattr(app.state, "db_conn"):
+    if hasattr(app.state, "db_pool") and app.state.db_pool:
+        await app.state.db_pool.close()
+    if hasattr(app.state, "db_conn") and app.state.db_conn:
         await app.state.db_conn.close()
-        print("DB connection closed")
+    print("[Shutdown] DB connections closed")
 
 class ChatRequest(BaseModel):
     message: str
@@ -100,10 +147,17 @@ class ThreadUpdate(BaseModel):
     title: str
 
 @app.get("/")
-async def root():
-    return {"status": "Edith AI is running"}
+async def health_check():
+    return {"status": "healthy", "database": getattr(app.state, "db_type", "unknown")}
 
-@app.get("/history/{thread_id}")
+# Include the router with all /api prefixed endpoints
+app.include_router(router)
+
+@router.get("/")
+async def api_root():
+    return {"status": "Edith AI API is running", "version": "2.5"}
+
+@router.get("/history/{thread_id}")
 async def get_history(thread_id: str):
     try:
         agent = app.state.agent
@@ -125,7 +179,7 @@ async def get_history(thread_id: str):
         print(f"Error fetching history: {e}")
         return {"messages": []}
 
-@app.get("/threads")
+@router.get("/threads")
 async def get_threads(user_id: Optional[str] = None):
     try:
         db = app.state.db_conn
@@ -143,7 +197,7 @@ async def get_threads(user_id: Optional[str] = None):
         print(f"Error fetching threads: {e}")
         return {"threads": []}
 
-@app.delete("/threads/{thread_id}")
+@router.delete("/threads/{thread_id}")
 async def delete_thread(thread_id: str):
     try:
         db = app.state.db_conn
@@ -159,7 +213,7 @@ async def delete_thread(thread_id: str):
         print(f"Error deleting thread: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
-@app.patch("/threads/{thread_id}")
+@router.patch("/threads/{thread_id}")
 async def update_thread(thread_id: str, update: ThreadUpdate):
     try:
         db = app.state.db_conn
@@ -170,7 +224,7 @@ async def update_thread(thread_id: str, update: ThreadUpdate):
         print(f"Error updating thread: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
-@app.delete("/history")
+@router.delete("/history")
 async def clear_all_history():
     try:
         db = app.state.db_conn
@@ -199,7 +253,7 @@ class GoogleProfile(BaseModel):
     name: str
     avatar: Optional[str] = None
 
-@app.post("/auth/signup")
+@router.post("/auth/signup")
 async def signup(user: UserRegister):
     db = app.state.db_conn
     
@@ -224,7 +278,7 @@ async def signup(user: UserRegister):
         "token": "dummy_token_" + user_id # In real app, use JWT
     }
 
-@app.post("/auth/signin")
+@router.post("/auth/signin")
 async def signin(user: UserLogin):
     db = app.state.db_conn
     
@@ -244,7 +298,7 @@ async def signin(user: UserLogin):
             "token": "dummy_token_" + user_id
         }
 
-@app.post("/auth/google")
+@router.post("/auth/google")
 async def google_auth(profile: GoogleProfile):
     db = app.state.db_conn
     
@@ -273,7 +327,7 @@ async def google_auth(profile: GoogleProfile):
             "token": "dummy_token_" + user_id
         }
 
-@app.post("/chat")
+@router.post("/chat")
 async def chat_endpoint(request: ChatRequest):
     """
     Streaming chat endpoint using LangGraph.
@@ -336,7 +390,7 @@ async def chat_endpoint(request: ChatRequest):
 
 # --- ML Prediction Endpoints ---
 
-@app.get("/api/predict/{symbol}")
+@router.get("/predict/{symbol}")
 async def predict_single(symbol: str, model: str = "refined_regcn"):
     """
     Run prediction for a single DJIA stock symbol (e.g. AAPL, MSFT).
@@ -362,7 +416,7 @@ async def predict_single(symbol: str, model: str = "refined_regcn"):
         raise HTTPException(status_code=500, detail=f"Prediction failed: {str(e)}")
 
 
-@app.get("/api/predictions")
+@router.get("/predictions")
 async def predict_all(symbols: Optional[str] = None, model: str = "refined_regcn"):
     """
     Run predictions for a comma-separated list of symbols (default: featured stocks).
@@ -407,7 +461,7 @@ async def predict_all(symbols: Optional[str] = None, model: str = "refined_regcn
 
     return {"predictions": results, "errors": errors}
 
-@app.get("/api/validate_ticker/{symbol}")
+@router.get("/validate_ticker/{symbol}")
 async def validate_ticker(symbol: str):
     """
     Validates if a ticker exists via yfinance.
@@ -421,7 +475,7 @@ async def validate_ticker(symbol: str):
     except Exception:
         return {"valid": False, "symbol": symbol.upper()}
 
-@app.get("/api/news_fallback/{query}")
+@router.get("/news_fallback/{query}")
 async def news_fallback(query: str):
     """
     Fallback news search using DuckDuckGo. E.g. query='CRM stock news'
@@ -573,7 +627,7 @@ async def _fetch_ddgs(query: str) -> list:
         return []
 
 
-@app.get("/api/news/{query}")
+@router.get("/news/{query}")
 async def get_news(query: str):
     """
     Unified news endpoint.

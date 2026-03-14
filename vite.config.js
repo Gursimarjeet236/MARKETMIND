@@ -9,6 +9,14 @@ export default defineConfig({
         host: "::",
         port: 8080,
         proxy: {
+            "/api/auth": {
+                target: "http://localhost:5000",
+                changeOrigin: true,
+            },
+            "/api/stocks": {
+                target: "http://localhost:5000",
+                changeOrigin: true,
+            },
             "/api": {
                 target: "http://localhost:9000",
                 changeOrigin: true,

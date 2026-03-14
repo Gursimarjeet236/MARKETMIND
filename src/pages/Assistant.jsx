@@ -80,7 +80,7 @@ const Assistant = () => {
     const fetchThreads = async () => {
         if (!user?.id) return;
         try {
-            const res = await fetch(`/threads?user_id=${user.id}`);
+            const res = await fetch(`/api/threads?user_id=${user.id}`);
             if (res.ok) {
                 const data = await res.json();
                 setThreads(data.threads || []);
@@ -92,7 +92,7 @@ const Assistant = () => {
 
     const fetchHistory = async (tid) => {
         try {
-            const res = await fetch(`/history/${tid}`);
+            const res = await fetch(`/api/history/${tid}`);
             if (res.ok) {
                 const data = await res.json();
                 const loadedMessages = data.messages.map((msg, idx) => ({
@@ -156,7 +156,7 @@ const Assistant = () => {
         };
 
         try {
-            const response = await fetch("/chat", {
+            const response = await fetch("/api/chat", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify(apiPayload),
@@ -219,7 +219,7 @@ const Assistant = () => {
         if (!confirm("Delete this chat?")) return;
 
         try {
-            await fetch(`/threads/${id}`, { method: "DELETE" });
+            await fetch(`/api/threads/${id}`, { method: "DELETE" });
             setThreads(prev => prev.filter(t => t.id !== id));
             if (threadId === id) startNewChat();
         } catch (err) {
@@ -237,7 +237,7 @@ const Assistant = () => {
     const handleRenameSave = async () => {
         if (!editTitle.trim()) return;
         try {
-            await fetch(`/threads/${editingId}`, {
+            await fetch(`/api/threads/${editingId}`, {
                 method: "PATCH",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ title: editTitle })

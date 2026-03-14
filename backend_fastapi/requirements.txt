@@ -3,7 +3,9 @@ uvicorn
 pydantic
 python-dotenv
 aiosqlite
+psycopg[binary]
 langgraph
+langgraph-checkpoint-postgres
 langgraph-checkpoint-sqlite
 langchain-huggingface
 langchain-core

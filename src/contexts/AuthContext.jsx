@@ -7,7 +7,7 @@ export function AuthProvider({ children }) {
     const [user, setUser] = useState(null);
     const [session, setSession] = useState(null);
     const [loading, setLoading] = useState(false);
-    const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:9000';
+    const API_URL = import.meta.env.VITE_API_URL || '/api';
     // Stores a callback to notify callers (e.g. Auth.jsx) when Google auth finishes
     // for ANY reason: success, error, or the user closing/cancelling the popup.
     const onGoogleCompleteRef = useRef(null);

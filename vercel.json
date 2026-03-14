@@ -10,27 +10,7 @@
       "destination": "/api/node_app.js"
     },
     {
-      "source": "/api/news/(.*)",
-      "destination": "/api/python_app.py"
-    },
-    {
-      "source": "/api/predict/(.*)",
-      "destination": "/api/python_app.py"
-    },
-    {
-      "source": "/api/predictions",
-      "destination": "/api/python_app.py"
-    },
-    {
-      "source": "/chat",
-      "destination": "/api/python_app.py"
-    },
-    {
-      "source": "/threads(.*)",
-      "destination": "/api/python_app.py"
-    },
-    {
-      "source": "/history/(.*)",
+      "source": "/api/(.*)",
       "destination": "/api/python_app.py"
     },
     {
