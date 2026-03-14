@@ -4,7 +4,7 @@ pipeline {
     environment {
         // --- CONFIGURE THESE VARIABLES ---
         AWS_REGION   = "us-east-1"
-        AWS_ACCOUNT_ID = "YOUR_AWS_ACCOUNT_ID" // Replace with your 12-digit ID
+        AWS_ACCOUNT_ID = "215648180190" // Replace with your 12-digit ID
         PROJECT_NAME = "marketmind"
         
         ECR_REGISTRY = "${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com"
