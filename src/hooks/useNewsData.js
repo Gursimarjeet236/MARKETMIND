@@ -48,7 +48,7 @@ export function useNewsData() {
 
         while (attempt < maxAttempts && !success) {
             try {
-                const res = await fetch(`${BACKEND_URL}/api/news/${encodeURIComponent(query)}`);
+                const res = await fetch(`${BACKEND_URL}/news/${encodeURIComponent(query)}`);
                 if (!res.ok) throw new Error(`HTTP ${res.status}`);
                 const data = await res.json();
 

@@ -252,7 +252,7 @@ const Predictions = () => {
                 // 2. Fetch missing from backend
                 if (symbolsToFetch.length > 0) {
                     const res = await fetch(
-                        `${BACKEND_URL}/api/predictions?symbols=${symbolsToFetch.join(",")}&model=${selectedModel}`
+                        `${BACKEND_URL}/predictions?symbols=${symbolsToFetch.join(",")}&model=${selectedModel}`
                     );
                     if (!res.ok) throw new Error(`Server error: ${res.status}`);
                     const data = await res.json();
@@ -315,7 +315,7 @@ const Predictions = () => {
 
         // 1. Ask Backend if it's valid via yfinance
         try {
-            const valRes = await fetch(`${BACKEND_URL}/api/validate_ticker/${sym}`);
+            const valRes = await fetch(`${BACKEND_URL}/validate_ticker/${sym}`);
             const valData = await valRes.json();
 
             if (!valData.valid) {
@@ -344,7 +344,7 @@ const Predictions = () => {
 
         // 3. Fetch from Backend
         try {
-            const res = await fetch(`${BACKEND_URL}/api/predict/${sym}?model=${selectedModel}`);
+            const res = await fetch(`${BACKEND_URL}/predict/${sym}?model=${selectedModel}`);
             if (!res.ok) throw new Error(`Server error ${res.status}`);
             const p = await res.json();
             const modelInfo = MODELS.find((m) => m.id === selectedModel);

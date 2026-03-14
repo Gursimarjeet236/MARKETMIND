@@ -6,6 +6,8 @@ import Input from "@/components/common/Input";
 import { Navbar } from "@/components/layout/Navbar";
 import { useClickOutside } from "@/hooks/useClickOutside";
 
+const BACKEND_URL = import.meta.env.VITE_API_URL || "http://localhost:9000";
+
 const Assistant = () => {
     const { user, loading } = useAuth();
     const navigate = useNavigate();
@@ -80,7 +82,7 @@ const Assistant = () => {
     const fetchThreads = async () => {
         if (!user?.id) return;
         try {
-            const res = await fetch(`http://localhost:9000/threads?user_id=${user.id}`);
+            const res = await fetch(`${BACKEND_URL}/threads?user_id=${user.id}`);
             if (res.ok) {
                 const data = await res.json();
                 setThreads(data.threads || []);
@@ -92,7 +94,7 @@ const Assistant = () => {
 
     const fetchHistory = async (tid) => {
         try {
-            const res = await fetch(`http://localhost:9000/history/${tid}`);
+            const res = await fetch(`${BACKEND_URL}/history/${tid}`);
             if (res.ok) {
                 const data = await res.json();
                 const loadedMessages = data.messages.map((msg, idx) => ({
@@ -156,7 +158,7 @@ const Assistant = () => {
         };
 
         try {
-            const response = await fetch("http://localhost:9000/chat", {
+            const response = await fetch(`${BACKEND_URL}/chat`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify(apiPayload),
@@ -219,7 +221,7 @@ const Assistant = () => {
         if (!confirm("Delete this chat?")) return;
 
         try {
-            await fetch(`http://localhost:9000/threads/${id}`, { method: "DELETE" });
+            await fetch(`${BACKEND_URL}/threads/${id}`, { method: "DELETE" });
             setThreads(prev => prev.filter(t => t.id !== id));
             if (threadId === id) startNewChat();
         } catch (err) {
@@ -237,7 +239,7 @@ const Assistant = () => {
     const handleRenameSave = async () => {
         if (!editTitle.trim()) return;
         try {
-            await fetch(`http://localhost:9000/threads/${editingId}`, {
+            await fetch(`${BACKEND_URL}/threads/${editingId}`, {
                 method: "PATCH",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ title: editTitle })

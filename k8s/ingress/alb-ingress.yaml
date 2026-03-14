@@ -27,40 +27,8 @@ spec:
   rules:
     - http:
         paths:
-          # Backend API services (using trailing slashes to avoid collision with frontend pages)
-          - path: /auth/
-            pathType: Prefix
-            backend:
-              service:
-                name: ml-api-svc
-                port:
-                  number: 9000
-          
+          # All backend API services (Auth, Chat, Predict, News) are consolidated under /api/
           - path: /api/
-            pathType: Prefix
-            backend:
-              service:
-                name: ml-api-svc
-                port:
-                  number: 9000
-                  
-          - path: /chat/
-            pathType: Prefix
-            backend:
-              service:
-                name: ml-api-svc
-                port:
-                  number: 9000
-                  
-          - path: /history/
-            pathType: Prefix
-            backend:
-              service:
-                name: ml-api-svc
-                port:
-                  number: 9000
-          
-          - path: /predict/
             pathType: Prefix
             backend:
               service:

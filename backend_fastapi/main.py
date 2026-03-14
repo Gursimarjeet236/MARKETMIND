@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import FastAPI, HTTPException, Request, APIRouter
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
@@ -36,6 +36,9 @@ def get_password_hash(password):
 load_dotenv()
 
 app = FastAPI(title="Edith AI API")
+
+# Use a router for /api namespace to avoid collisions with frontend routes
+router = APIRouter(prefix="/api")
 
 # Configure CORS
 app.add_middleware(
@@ -111,7 +114,7 @@ class ThreadUpdate(BaseModel):
 async def root():
     return {"status": "Edith AI is running"}
 
-@app.get("/history/{thread_id}")
+@router.get("/history/{thread_id}")
 async def get_history(thread_id: str):
     try:
         agent = app.state.agent
@@ -133,7 +136,7 @@ async def get_history(thread_id: str):
         print(f"Error fetching history: {e}")
         return {"messages": []}
 
-@app.get("/threads")
+@router.get("/threads")
 async def get_threads(user_id: Optional[str] = None):
     try:
         if not user_id:
@@ -156,7 +159,7 @@ async def get_threads(user_id: Optional[str] = None):
         print(f"Error fetching threads: {e}")
         return {"threads": []}
 
-@app.delete("/threads/{thread_id}")
+@router.delete("/threads/{thread_id}")
 async def delete_thread(thread_id: str):
     try:
         async with app.state.db_pool.connection() as conn:
@@ -166,7 +169,7 @@ async def delete_thread(thread_id: str):
         print(f"Error deleting thread: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
-@app.patch("/threads/{thread_id}")
+@router.patch("/threads/{thread_id}")
 async def update_thread(thread_id: str, update: ThreadUpdate):
     try:
         async with app.state.db_pool.connection() as conn:
@@ -176,7 +179,7 @@ async def update_thread(thread_id: str, update: ThreadUpdate):
         print(f"Error updating thread: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
-@app.delete("/history")
+@router.delete("/history")
 async def clear_all_history():
     try:
         async with app.state.db_pool.connection() as conn:
@@ -204,7 +207,7 @@ class GoogleProfile(BaseModel):
     name: str
     avatar: Optional[str] = None
 
-@app.post("/auth/signup")
+@router.post("/auth/signup")
 async def signup(user: UserRegister):
     async with app.state.db_pool.connection() as conn:
         async with conn.cursor() as cursor:
@@ -228,7 +231,7 @@ async def signup(user: UserRegister):
         "token": "dummy_token_" + user_id # In real app, use JWT
     }
 
-@app.post("/auth/signin")
+@router.post("/auth/signin")
 async def signin(user: UserLogin):
     async with app.state.db_pool.connection() as conn:
         async with conn.cursor() as cursor:
@@ -249,7 +252,7 @@ async def signin(user: UserLogin):
                 "token": "dummy_token_" + user_id
             }
 
-@app.post("/auth/google")
+@router.post("/auth/google")
 async def google_auth(profile: GoogleProfile):
     async with app.state.db_pool.connection() as conn:
         async with conn.cursor() as cursor:
@@ -276,7 +279,7 @@ async def google_auth(profile: GoogleProfile):
                     "token": "dummy_token_" + user_id
                 }
 
-@app.post("/chat")
+@router.post("/chat")
 async def chat_endpoint(request: ChatRequest):
     """
     Streaming chat endpoint using LangGraph.
@@ -337,7 +340,7 @@ async def chat_endpoint(request: ChatRequest):
 
 # --- ML Prediction Endpoints ---
 
-@app.get("/api/predict/{symbol}")
+@router.get("/predict/{symbol}")
 async def predict_single(symbol: str, model: str = "refined_regcn"):
     """
     Run prediction for a single DJIA stock symbol (e.g. AAPL, MSFT).
@@ -363,7 +366,7 @@ async def predict_single(symbol: str, model: str = "refined_regcn"):
         raise HTTPException(status_code=500, detail=f"Prediction failed: {str(e)}")
 
 
-@app.get("/api/predictions")
+@router.get("/predictions")
 async def predict_all(symbols: Optional[str] = None, model: str = "refined_regcn"):
     """
     Run predictions for a comma-separated list of symbols (default: featured stocks).
@@ -408,7 +411,7 @@ async def predict_all(symbols: Optional[str] = None, model: str = "refined_regcn
 
     return {"predictions": results, "errors": errors}
 
-@app.get("/api/validate_ticker/{symbol}")
+@router.get("/validate_ticker/{symbol}")
 async def validate_ticker(symbol: str):
     """
     Validates if a ticker exists via yfinance.
@@ -422,7 +425,7 @@ async def validate_ticker(symbol: str):
     except Exception:
         return {"valid": False, "symbol": symbol.upper()}
 
-@app.get("/api/news_fallback/{query}")
+@router.get("/news_fallback/{query}")
 async def news_fallback(query: str):
     """
     Fallback news search using DuckDuckGo. E.g. query='CRM stock news'
@@ -574,7 +577,7 @@ async def _fetch_ddgs(query: str) -> list:
         return []
 
 
-@app.get("/api/news/{query}")
+@router.get("/news/{query}")
 async def get_news(query: str):
     """
     Unified news endpoint.
@@ -619,6 +622,9 @@ async def get_news(query: str):
     print(f"[News] '{query}' → {len(articles)} articles via {provider}")
     return {"articles": articles, "source": provider}
 
+
+# Include the router with all API endpoints
+app.include_router(router)
 
 if __name__ == "__main__":
     # Start the server (Startup Bug Fixed - Final Recovery)

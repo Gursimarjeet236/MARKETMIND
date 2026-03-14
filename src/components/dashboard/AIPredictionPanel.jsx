@@ -14,7 +14,7 @@ const AIPredictionPanel = ({ stock }) => {
         const fetchPrediction = async () => {
             setLoading(true);
             try {
-                const res = await fetch(`${BACKEND_URL}/api/predict/${stock.symbol}?model=refined_regcn`);
+                const res = await fetch(`${BACKEND_URL}/predict/${stock.symbol}?model=refined_regcn`);
                 if (!res.ok) throw new Error("Network error");
                 const data = await res.json();
 

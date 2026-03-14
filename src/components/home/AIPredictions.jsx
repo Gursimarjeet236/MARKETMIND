@@ -122,7 +122,7 @@ const AIPredictions = () => {
                 // 2. Fallback to API fetch if cache is empty or < 3 items
                 const randomSymbols = pickRandom(ALL_DJIA, 3);
                 const res = await fetch(
-                    `${BACKEND_URL}/api/predictions?symbols=${randomSymbols.join(",")}&model=refined_regcn`
+                    `${BACKEND_URL}/predictions?symbols=${randomSymbols.join(",")}&model=refined_regcn`
                 );
                 if (!res.ok) throw new Error("Network response was not ok");
                 const data = await res.json();

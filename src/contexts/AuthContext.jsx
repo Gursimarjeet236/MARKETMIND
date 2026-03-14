@@ -8,6 +8,7 @@ export function AuthProvider({ children }) {
     const [session, setSession] = useState(null);
     const [loading, setLoading] = useState(false);
     const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:9000';
+    // All routes under API_URL will now be prefixed with /api by the backend router
     // Stores a callback to notify callers (e.g. Auth.jsx) when Google auth finishes
     // for ANY reason: success, error, or the user closing/cancelling the popup.
     const onGoogleCompleteRef = useRef(null);
