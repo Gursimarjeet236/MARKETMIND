@@ -93,6 +93,11 @@ async def startup_event():
                 updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         """)
+        # Schema safety check
+        try:
+            await conn.execute("ALTER TABLE threads ADD COLUMN IF NOT EXISTS user_id TEXT")
+        except:
+             pass
         
     print("Database tables initialized")
 
@@ -287,60 +292,43 @@ async def google_auth(profile: GoogleProfile):
 
 @router.post("/chat")
 async def chat_endpoint(request: ChatRequest):
-    """
-    Streaming chat endpoint using LangGraph.
-    """
-    thread_id = request.thread_id
-    is_new_thread = False
+    """Streaming chat endpoint using LangGraph with heartbeats."""
+    thread_id = request.thread_id or str(uuid.uuid4())
+    user_id = request.user_id
     
-    if not thread_id:
-        # If client says null, we must generate one. However, the client should probably generate one to avoid losing it.
-        # But if we generate it here, we must return it? Protocol doesn't easily support returning ID in stream unless we inject it.
-        # STRATEGY: Frontend will always generate a UUID for new chats.
-        # Fallback if somehow missing:
-        thread_id = str(uuid.uuid4())
-        is_new_thread = True
-    
-    async with app.state.db_pool.connection() as conn:
-        async with conn.cursor() as cursor:
-            await cursor.execute("SELECT 1 FROM threads WHERE id = %s", (thread_id,))
-            exists = await cursor.fetchone()
-            if not exists:
-                is_new_thread = True
+    print(f"[Chat] Thread: {thread_id}, User: {user_id}")
 
-        if is_new_thread:
-            # Generate a title if it's new (using first few words)
-            title = request.message[:30].strip()
-            if len(request.message) > 30:
-                title += "..."
-            
-            await conn.execute(
-                "INSERT INTO threads (id, title, user_id) VALUES (%s, %s, %s)",
-                (thread_id, title, request.user_id)
-            )
-        else:
-            # Update updated_at
-            await conn.execute("UPDATE threads SET updated_at = CURRENT_TIMESTAMP WHERE id = %s", (thread_id,))
+    try:
+        async with app.state.db_pool.connection() as conn:
+            async with conn.cursor() as cursor:
+                await cursor.execute("SELECT 1 FROM threads WHERE id = %s", (thread_id,))
+                if not await cursor.fetchone():
+                    title = request.message[:35] + "..." if len(request.message) > 35 else request.message
+                    await conn.execute("INSERT INTO threads (id, title, user_id) VALUES (%s, %s, %s)", (thread_id, title, user_id))
+                else:
+                    await conn.execute("UPDATE threads SET updated_at = CURRENT_TIMESTAMP WHERE id = %s", (thread_id,))
+    except Exception as e:
+        print(f"[Chat] DB Error: {e}")
 
     async def event_generator():
         try:
+            # Yield initial heartbeat to prevent ALB timeout
+            yield " " 
             agent = app.state.agent
             config = {"configurable": {"thread_id": thread_id}}
             input_state = {"messages": [("user", request.message)]}
 
             async for event in agent.astream_events(input_state, config, version="v2"):
-                kind = event["event"]
-                # For v2, content is in data.chunk.content for stream events
-                if kind == "on_chat_model_stream":
+                if event["event"] == "on_chat_model_stream":
                     content = event["data"]["chunk"].content
                     if content:
                         yield content
-                        await asyncio.sleep(0.04)
+                elif event["event"] == "on_tool_start":
+                    print(f"[Chat] {thread_id} calling tool: {event.get('name')}")
         except Exception as e:
             import traceback
-            print(f"ERROR in chat_endpoint: {e}")
             traceback.print_exc()
-            yield f"Error: {str(e)}"
+            yield f"\n\n[System Error]: {str(e)}"
 
     return StreamingResponse(event_generator(), media_type="text/plain")
 
