@@ -42,9 +42,6 @@ pipeline {
                     echo "Building Frontend Image..."
                     sh "docker build -t ${ECR_REGISTRY}/${PROJECT_NAME}/frontend:${IMAGE_TAG} -f Dockerfile.frontend ."
 
-                    echo "Building Auth API Image..."
-                    sh "docker build -t ${ECR_REGISTRY}/${PROJECT_NAME}/auth-api:${IMAGE_TAG} -f server/Dockerfile ./server"
-
                     echo "Building ML API Image..."
                     sh "docker build -t ${ECR_REGISTRY}/${PROJECT_NAME}/ml-api:${IMAGE_TAG} -f backend_fastapi/Dockerfile ./backend_fastapi"
                 }
@@ -59,7 +56,6 @@ pipeline {
 
                     echo "Pushing images to ECR..."
                     sh "docker push ${ECR_REGISTRY}/${PROJECT_NAME}/frontend:${IMAGE_TAG}"
-                    sh "docker push ${ECR_REGISTRY}/${PROJECT_NAME}/auth-api:${IMAGE_TAG}"
                     sh "docker push ${ECR_REGISTRY}/${PROJECT_NAME}/ml-api:${IMAGE_TAG}"
                 }
             }
@@ -79,9 +75,6 @@ pipeline {
                     
                     echo "Deploying Frontend..."
                     sh 'sed "s/\\${IMAGE_TAG}/' + IMAGE_TAG + '/g; s/\\${AWS_ACCOUNT_ID}/' + AWS_ACCOUNT_ID + '/g; s/\\${AWS_REGION}/' + AWS_REGION + '/g" k8s/frontend/deployment.yaml | kubectl apply -f -'
-                    
-                    echo "Deploying Auth API..."
-                    sh 'sed "s/\\${IMAGE_TAG}/' + IMAGE_TAG + '/g; s/\\${AWS_ACCOUNT_ID}/' + AWS_ACCOUNT_ID + '/g; s/\\${AWS_REGION}/' + AWS_REGION + '/g" k8s/auth-api/deployment.yaml | kubectl apply -f -'
                     
                     echo "Deploying ML API..."
                     sh 'sed "s/\\${IMAGE_TAG}/' + IMAGE_TAG + '/g; s/\\${AWS_ACCOUNT_ID}/' + AWS_ACCOUNT_ID + '/g; s/\\${AWS_REGION}/' + AWS_REGION + '/g" k8s/ml-api/deployment.yaml | kubectl apply -f -'

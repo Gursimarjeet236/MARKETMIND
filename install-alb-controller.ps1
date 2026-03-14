@@ -32,24 +32,18 @@ Write-Host "Waiting 30s for cert-manager pods to initialize..."
 Start-Sleep -Seconds 30
 kubectl rollout status deployment/cert-manager-webhook -n cert-manager --timeout=120s
 
-Write-Host "`n==> Step 2: Creating the ALB controller ServiceAccount..." -ForegroundColor Cyan
-$saYaml = @"
-apiVersion: v1
-kind: ServiceAccount
-metadata:
-  name: aws-load-balancer-controller
-  namespace: kube-system
-  annotations:
-    eks.amazonaws.com/role-arn: $($ALB_ROLE_ARN)
-"@
-$saYaml | kubectl apply -f -
-
-Write-Host "`n==> Step 3: Applying ALB Controller v3.1.0 manifest..." -ForegroundColor Cyan
+Write-Host "`n==> Step 2: Applying ALB Controller v3.1.0 manifest..." -ForegroundColor Cyan
 kubectl apply --validate=false -f https://github.com/kubernetes-sigs/aws-load-balancer-controller/releases/download/v3.1.0/v3_1_0_full.yaml
 
+Write-Host "`n==> Step 3: Annotating the ServiceAccount with the IAM role..." -ForegroundColor Cyan
+kubectl annotate serviceaccount aws-load-balancer-controller -n kube-system eks.amazonaws.com/role-arn=$ALB_ROLE_ARN --overwrite
+
 Write-Host "`n==> Step 4: Patching the controller with cluster name: $CLUSTER_NAME..." -ForegroundColor Cyan
-# Add the cluster-name argument to the beginning of the list
+# Add the cluster-name argument
 kubectl patch deployment aws-load-balancer-controller -n kube-system --type='json' -p='[{"op": "add", "path": "/spec/template/spec/containers/0/args/0", "value": "--cluster-name=' + $CLUSTER_NAME + '"}]'
+
+Write-Host "`n==> Step 5: Restarting controller to pick up IAM role..." -ForegroundColor Cyan
+kubectl rollout restart deployment aws-load-balancer-controller -n kube-system
 
 Write-Host "`n==> Done! Waiting for controller rollout..." -ForegroundColor Green
 kubectl rollout status deployment/aws-load-balancer-controller -n kube-system --timeout=180s

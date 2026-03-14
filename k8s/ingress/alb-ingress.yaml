@@ -25,20 +25,26 @@ spec:
   ingressClassName: alb
   # If you set up ACM, uncomment the rules below and add your domain
   rules:
-    # - host: marketmind.yourdomain.com
     - http:
         paths:
-          # Match Auth API
-          - path: /api/auth
+          # All backend traffic (Auth, Chat, Predict) goes to FastAPI
+          - path: /auth
             pathType: Prefix
             backend:
               service:
-                name: auth-api-svc
+                name: ml-api-svc
                 port:
-                  number: 3000
+                  number: 9000
           
-          # Match ML API
-          - path: /api/ml
+          - path: /api
+            pathType: Prefix
+            backend:
+              service:
+                name: ml-api-svc
+                port:
+                  number: 9000
+                  
+          - path: /chat
             pathType: Prefix
             backend:
               service:
