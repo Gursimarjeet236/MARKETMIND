@@ -29,6 +29,9 @@ module "vpc" {
   azs            = local.azs
   public_subnets = [for k, v in local.azs : cidrsubnet(local.vpc_cidr, 8, k)]
 
+  # Required for EKS nodes in public subnets — assigns a public IP on launch
+  map_public_ip_on_launch = true
+
   # No private subnets, no NAT Gateway — saves ~$32+/month
   enable_nat_gateway   = false
   single_nat_gateway   = false
