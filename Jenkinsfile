@@ -66,12 +66,6 @@ pipeline {
         }
 
         stage('Deploy to Kubernetes (EKS)') {
-            // Only deploy if we are on the main branch
-            when {
-                anyOf {
-                    branch 'devops'
-                }
-            }
             steps {
                 script {
                     // Update kubeconfig (Ensures Jenkins can talk to EKS)
