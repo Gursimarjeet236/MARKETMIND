@@ -24,7 +24,7 @@ pipeline {
                     steps {
                         echo "Building React app to ensure it compiles..."
                         sh 'npm install'
-                        sh 'npm run build'
+                        sh 'VITE_API_URL=/ npm run build'
                     }
                 }
                 stage('Backend') {
@@ -40,7 +40,7 @@ pipeline {
             steps {
                 script {
                     echo "Building Frontend Image..."
-                    sh "docker build -t ${ECR_REGISTRY}/${PROJECT_NAME}/frontend:${IMAGE_TAG} -f Dockerfile.frontend ."
+                    sh "docker build --build-arg VITE_API_URL=/ -t ${ECR_REGISTRY}/${PROJECT_NAME}/frontend:${IMAGE_TAG} -f Dockerfile.frontend ."
 
                     echo "Building ML API Image..."
                     sh "docker build -t ${ECR_REGISTRY}/${PROJECT_NAME}/ml-api:${IMAGE_TAG} -f backend_fastapi/Dockerfile ./backend_fastapi"

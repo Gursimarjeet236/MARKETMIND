@@ -27,8 +27,8 @@ spec:
   rules:
     - http:
         paths:
-          # All backend traffic (Auth, Chat, Predict) goes to FastAPI
-          - path: /auth
+          # Backend API services (using trailing slashes to avoid collision with frontend pages)
+          - path: /auth/
             pathType: Prefix
             backend:
               service:
@@ -36,7 +36,7 @@ spec:
                 port:
                   number: 9000
           
-          - path: /api
+          - path: /api/
             pathType: Prefix
             backend:
               service:
@@ -44,7 +44,23 @@ spec:
                 port:
                   number: 9000
                   
-          - path: /chat
+          - path: /chat/
+            pathType: Prefix
+            backend:
+              service:
+                name: ml-api-svc
+                port:
+                  number: 9000
+                  
+          - path: /history/
+            pathType: Prefix
+            backend:
+              service:
+                name: ml-api-svc
+                port:
+                  number: 9000
+          
+          - path: /predict/
             pathType: Prefix
             backend:
               service:
