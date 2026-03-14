@@ -110,7 +110,7 @@ class ChatRequest(BaseModel):
 class ThreadUpdate(BaseModel):
     title: str
 
-@app.get("/")
+@router.get("/")
 async def root():
     return {"status": "Edith AI is running"}
 
