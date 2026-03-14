@@ -11,7 +11,28 @@ $ALB_ROLE_ARN = "arn:aws:iam::215648180190:role/marketmind-prod-alb-controller-r
 $CLUSTER_NAME = "marketmind-prod-eks"
 $AWS_REGION = "us-east-1"
 
-Write-Host "==> Step 1: Creating the ALB controller ServiceAccount with the IAM role annotation..." -ForegroundColor Cyan
+$ALB_ROLE_ARN = "arn:aws:iam::215648180190:role/marketmind-prod-alb-controller-role"
+$CLUSTER_NAME = "marketmind-prod-eks"
+$AWS_REGION = "us-east-1"
+
+Write-Host "==> Step 0: Cleaning up existing/stuck installation components..." -ForegroundColor Yellow
+# Delete the webhooks first to break any deadlock loops
+kubectl delete mutatingwebhookconfiguration aws-load-balancer-webhook 2>$null
+kubectl delete validatingwebhookconfiguration aws-load-balancer-webhook 2>$null
+kubectl delete mutatingwebhookconfiguration cert-manager-webhook 2>$null
+kubectl delete validatingwebhookconfiguration cert-manager-webhook 2>$null
+
+# Delete existing deployments if they are stuck
+kubectl delete deployment aws-load-balancer-controller -n kube-system 2>$null
+
+Write-Host "==> Step 1: Installing cert-manager (v1.15.3)..." -ForegroundColor Cyan
+kubectl apply -f https://github.com/cert-manager/cert-manager/releases/download/v1.15.3/cert-manager.yaml
+
+Write-Host "Waiting 30s for cert-manager pods to initialize..."
+Start-Sleep -Seconds 30
+kubectl rollout status deployment/cert-manager-webhook -n cert-manager --timeout=120s
+
+Write-Host "`n==> Step 2: Creating the ALB controller ServiceAccount..." -ForegroundColor Cyan
 $saYaml = @"
 apiVersion: v1
 kind: ServiceAccount
@@ -23,18 +44,16 @@ metadata:
 "@
 $saYaml | kubectl apply -f -
 
-Write-Host "`n==> Step 2: Downloading and applying the official ALB Controller YAML manifest..." -ForegroundColor Cyan
-# This is the official manifest published by AWS
-kubectl apply --validate=false -f https://github.com/kubernetes-sigs/aws-load-balancer-controller/releases/latest/download/v2_8_1_full.yaml
+Write-Host "`n==> Step 3: Applying ALB Controller v3.1.0 manifest..." -ForegroundColor Cyan
+kubectl apply --validate=false -f https://github.com/kubernetes-sigs/aws-load-balancer-controller/releases/download/v3.1.0/v3_1_0_full.yaml
 
-Write-Host "`n==> Step 3: Patching the controller deployment with your cluster name..." -ForegroundColor Cyan
-# Using a slightly different approach for PowerShell to ensure string escaping works
-kubectl patch deployment aws-load-balancer-controller -n kube-system --type='json' -p='[{"op": "replace", "path": "/spec/template/spec/containers/0/args/0", "value": "--cluster-name=' + $CLUSTER_NAME + '"}]'
+Write-Host "`n==> Step 4: Patching the controller with cluster name: $CLUSTER_NAME..." -ForegroundColor Cyan
+# Add the cluster-name argument to the beginning of the list
+kubectl patch deployment aws-load-balancer-controller -n kube-system --type='json' -p='[{"op": "add", "path": "/spec/template/spec/containers/0/args/0", "value": "--cluster-name=' + $CLUSTER_NAME + '"}]'
 
-Write-Host "`n==> Done! Waiting for controller to become ready..." -ForegroundColor Green
-kubectl rollout status deployment/aws-load-balancer-controller -n kube-system
+Write-Host "`n==> Done! Waiting for controller rollout..." -ForegroundColor Green
+kubectl rollout status deployment/aws-load-balancer-controller -n kube-system --timeout=180s
 
-Write-Host "`n==> ALB Ingress Controller is installed and running." -ForegroundColor Green
-Write-Host "==> You can now apply your K8s manifests:"
-Write-Host "    kubectl apply -f k8s/namespace.yaml"
-Write-Host "    kubectl apply -f k8s/"
+Write-Host "`n==> ALB Ingress Controller is ready." -ForegroundColor Green
+Write-Host "==> You can now check your ingress address:"
+Write-Host "    kubectl get ingress -n marketmind"
