@@ -78,13 +78,13 @@ pipeline {
                     // and apply them to the cluster
                     
                     echo "Deploying Frontend..."
-                    sh "sed 's/\\\$${'\{'}IMAGE_TAG${'\}'}/${IMAGE_TAG}/g; s/\\\$${'\{'}AWS_ACCOUNT_ID${'\}'}/${AWS_ACCOUNT_ID}/g; s/\\\$${'\{'}AWS_REGION${'\}'}/${AWS_REGION}/g' k8s/frontend/deployment.yaml | kubectl apply -f -"
+                    sh 'sed "s/\\${IMAGE_TAG}/' + IMAGE_TAG + '/g; s/\\${AWS_ACCOUNT_ID}/' + AWS_ACCOUNT_ID + '/g; s/\\${AWS_REGION}/' + AWS_REGION + '/g" k8s/frontend/deployment.yaml | kubectl apply -f -'
                     
                     echo "Deploying Auth API..."
-                    sh "sed 's/\\\$${'\{'}IMAGE_TAG${'\}'}/${IMAGE_TAG}/g; s/\\\$${'\{'}AWS_ACCOUNT_ID${'\}'}/${AWS_ACCOUNT_ID}/g; s/\\\$${'\{'}AWS_REGION${'\}'}/${AWS_REGION}/g' k8s/auth-api/deployment.yaml | kubectl apply -f -"
+                    sh 'sed "s/\\${IMAGE_TAG}/' + IMAGE_TAG + '/g; s/\\${AWS_ACCOUNT_ID}/' + AWS_ACCOUNT_ID + '/g; s/\\${AWS_REGION}/' + AWS_REGION + '/g" k8s/auth-api/deployment.yaml | kubectl apply -f -'
                     
                     echo "Deploying ML API..."
-                    sh "sed 's/\\\$${'\{'}IMAGE_TAG${'\}'}/${IMAGE_TAG}/g; s/\\\$${'\{'}AWS_ACCOUNT_ID${'\}'}/${AWS_ACCOUNT_ID}/g; s/\\\$${'\{'}AWS_REGION${'\}'}/${AWS_REGION}/g' k8s/ml-api/deployment.yaml | kubectl apply -f -"
+                    sh 'sed "s/\\${IMAGE_TAG}/' + IMAGE_TAG + '/g; s/\\${AWS_ACCOUNT_ID}/' + AWS_ACCOUNT_ID + '/g; s/\\${AWS_REGION}/' + AWS_REGION + '/g" k8s/ml-api/deployment.yaml | kubectl apply -f -'
 
                     echo "Deploying Ingress Engine..."
                     sh "kubectl apply -f k8s/ingress/alb-ingress.yaml"
