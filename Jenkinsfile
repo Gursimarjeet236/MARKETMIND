@@ -69,7 +69,6 @@ pipeline {
             // Only deploy if we are on the main branch
             when {
                 anyOf {
-                    branch 'main'
                     branch 'devops'
                 }
             }
