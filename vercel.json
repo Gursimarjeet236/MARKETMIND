@@ -1,0 +1,41 @@
+{
+  "version": 2,
+  "rewrites": [
+    {
+      "source": "/api/auth/(.*)",
+      "destination": "/api/node_app.js"
+    },
+    {
+      "source": "/api/stocks/(.*)",
+      "destination": "/api/node_app.js"
+    },
+    {
+      "source": "/api/news/(.*)",
+      "destination": "/api/python_app.py"
+    },
+    {
+      "source": "/api/predict/(.*)",
+      "destination": "/api/python_app.py"
+    },
+    {
+      "source": "/api/predictions",
+      "destination": "/api/python_app.py"
+    },
+    {
+      "source": "/chat",
+      "destination": "/api/python_app.py"
+    },
+    {
+      "source": "/threads(.*)",
+      "destination": "/api/python_app.py"
+    },
+    {
+      "source": "/history/(.*)",
+      "destination": "/api/python_app.py"
+    },
+    {
+      "source": "/(.*)",
+      "destination": "/index.html"
+    }
+  ]
+}

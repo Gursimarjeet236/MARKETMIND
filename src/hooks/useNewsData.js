@@ -26,7 +26,7 @@ function computeSentimentSummary(articles) {
  *
  * @returns {Object} { articles, sentimentSummary, loading, error, fetchNews, refresh }
  */
-const BACKEND_URL = import.meta.env.VITE_API_URL || "http://localhost:9000";
+const BACKEND_URL = import.meta.env.VITE_API_URL || "";
 
 export function useNewsData() {
     const [articles, setArticles] = useState([]);

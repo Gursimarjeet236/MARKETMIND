@@ -13,7 +13,7 @@ export function useStockData() {
 
         try {
             // First try to fetch from backend
-            const res = await fetch(`http://localhost:5000/api/stocks/${symbol}`);
+            const res = await fetch(`/api/stocks/${symbol}`);
             const data = await res.json();
 
             if (res.ok) {
@@ -45,7 +45,7 @@ export function useStockData() {
 
     const fetchPriceHistory = useCallback(async (symbol) => {
         try {
-            const res = await fetch(`http://localhost:5000/api/stocks/history/${symbol}`);
+            const res = await fetch(`/api/stocks/history/${symbol}`);
             const data = await res.json();
 
             if (data && Array.isArray(data)) {
