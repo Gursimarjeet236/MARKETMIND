@@ -142,23 +142,26 @@ const Assistant = () => {
         setMessages(prev => [...prev, userMsg]);
         setIsThinking(true);
 
-        // Generate a thread_id client-side if this is a new chat,
-        // so the user_id is reliably associated on the backend.
+        // Generate or reuse thread_id
         let activeThreadId = threadId;
-        if (!activeThreadId) {
-            activeThreadId = crypto.randomUUID();
-            setThreadId(activeThreadId);
-        }
-
-        // Prepare request
-        const apiPayload = {
-            message: currentMsg,
-            thread_id: activeThreadId,
-            user_id: user?.id
-        };
 
         try {
-            const response = await fetch(`${BACKEND_URL}/chat`, {
+            if (!activeThreadId) {
+                // crypto.randomUUID() requires Secure Context (HTTPS)
+                activeThreadId = (typeof crypto !== 'undefined' && crypto.randomUUID) 
+                    ? crypto.randomUUID() 
+                    : `thread-${Date.now()}-${Math.floor(Math.random() * 1000000)}`;
+                setThreadId(activeThreadId);
+            }
+
+            // Prepare request
+            const apiPayload = {
+                message: currentMsg,
+                thread_id: activeThreadId,
+                user_id: user?.id
+            };
+
+            const response = await fetch(`${BACKEND_URL.replace(/\/$/, '')}/chat`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify(apiPayload),

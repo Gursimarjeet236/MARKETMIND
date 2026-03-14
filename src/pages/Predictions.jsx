@@ -4,7 +4,8 @@ import { PredictionCard } from "@/components/prediction/PredictionCard";
 import { PipelineLoader } from "@/components/prediction/PipelineLoader";
 import { useAuth } from "@/contexts/AuthContext";
 
-const BACKEND_URL = import.meta.env.VITE_API_URL || "http://localhost:9000";
+const VITE_API_URL = import.meta.env.VITE_API_URL || "http://localhost:9000";
+const BACKEND_URL = VITE_API_URL.replace(/\/$/, "");
 
 // Full DJIA universe
 const ALL_DJIA = [

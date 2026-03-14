@@ -40,6 +40,13 @@ app = FastAPI(title="Edith AI API")
 # Use a router for /api namespace to avoid collisions with frontend routes
 router = APIRouter(prefix="/api")
 
+@app.middleware("http")
+async def log_requests(request: Request, call_next):
+    print(f"[Request] {request.method} {request.url.path}")
+    response = await call_next(request)
+    print(f"[Response] {request.method} {request.url.path} - {response.status_code}")
+    return response
+
 # Configure CORS
 app.add_middleware(
     CORSMiddleware,
