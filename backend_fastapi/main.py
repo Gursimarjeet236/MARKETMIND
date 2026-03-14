@@ -330,6 +330,7 @@ async def chat_endpoint(request: ChatRequest):
                     content = event["data"]["chunk"].content
                     if content:
                         yield content
+                        await asyncio.sleep(0.04) # Artificial delay for smoother reading
                 elif event["event"] == "on_tool_start":
                     print(f"[Chat] {thread_id} calling tool: {event.get('name')}")
         except Exception as e:
