@@ -69,6 +69,9 @@ pipeline {
 
                     // Apply the namespace first
                     sh "kubectl apply -f k8s/namespace.yaml"
+                    
+                    // Deploy ServiceAccount for ML API (IRSA)
+                    sh "kubectl apply -f k8s/ml-api/service-account.yaml"
 
                     // Use sed to inject the dynamic IMAGE_TAG into the deployment YAMLs
                     // and apply them to the cluster
