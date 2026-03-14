@@ -23,7 +23,7 @@ pipeline {
                 stage('Frontend') {
                     steps {
                         echo "Building React app to ensure it compiles..."
-                        sh 'npm ci'
+                        sh 'npm install'
                         sh 'npm run build'
                     }
                 }
@@ -68,7 +68,10 @@ pipeline {
         stage('Deploy to Kubernetes (EKS)') {
             // Only deploy if we are on the main branch
             when {
-                branch 'main'
+                anyOf {
+                    branch 'main'
+                    branch 'devops'
+                }
             }
             steps {
                 script {
