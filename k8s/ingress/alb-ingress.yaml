@@ -28,7 +28,7 @@ spec:
     - http:
         paths:
           # All backend API services (Auth, Chat, Predict, News) are consolidated under /api/
-          - path: /api/
+          - path: /api
             pathType: Prefix
             backend:
               service:

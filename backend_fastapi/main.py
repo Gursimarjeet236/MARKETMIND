@@ -110,9 +110,15 @@ class ChatRequest(BaseModel):
 class ThreadUpdate(BaseModel):
     title: str
 
+@app.get("/")
+async def health_check():
+    """Root health check for Kubernetes liveness/readiness probes."""
+    return {"status": "healthy", "service": "ml-api"}
+
 @router.get("/")
-async def root():
-    return {"status": "Edith AI is running"}
+async def api_root():
+    """Nestable root for /api/ namespace."""
+    return {"status": "Edith AI API is running", "version": "2.0"}
 
 @router.get("/history/{thread_id}")
 async def get_history(thread_id: str):

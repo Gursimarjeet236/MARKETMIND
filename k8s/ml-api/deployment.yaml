@@ -50,9 +50,9 @@ spec:
             limits:
               cpu: 1000m
               memory: 2Gi
-          volumeMounts:
-            - name: model-storage
-              mountPath: /app/models
+# Removed masking volume mount to use bundled models from Docker image
+# - name: model-storage
+#   mountPath: /app/models
           livenessProbe:
             httpGet:
               path: /
@@ -63,7 +63,7 @@ spec:
             httpGet:
               path: /
               port: 9000
-            initialDelaySeconds: 45
+            initialDelaySeconds: 30
             
       volumes:
         - name: model-storage
