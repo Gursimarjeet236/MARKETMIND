@@ -10,10 +10,6 @@
       "destination": "/api/node_app.js"
     },
     {
-      "source": "/api/(.*)",
-      "destination": "/api/python_app.py"
-    },
-    {
       "source": "/(.*)",
       "destination": "/index.html"
     }
