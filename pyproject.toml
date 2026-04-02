@@ -1,7 +1,7 @@
 [project]
 name = "marketmind"
 version = "0.1.0"
-requires-python = ">=3.11,<3.12"
+requires-python = ">=3.12,<3.13"
 dependencies = [
     "fastapi",
     "pydantic",
@@ -16,7 +16,7 @@ dependencies = [
     "duckduckgo-search",
     "httpx",
     "passlib[argon2]",
-    "tensorflow-cpu==2.15.0",
+    "tensorflow-cpu==2.16.1",
     "numpy",
     "pandas",
     "scikit-learn",

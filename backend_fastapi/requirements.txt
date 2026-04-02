@@ -16,7 +16,7 @@ httpx
 passlib[argon2]
 
 # ML / Prediction dependencies
-tensorflow-cpu
+tensorflow-cpu==2.16.1
 numpy
 pandas
 scikit-learn
