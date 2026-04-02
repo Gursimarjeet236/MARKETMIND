@@ -199,8 +199,7 @@ class ThreadUpdate(BaseModel):
 async def health_check():
     return {"status": "healthy", "database": getattr(app.state, "db_type", "unknown")}
 
-# Include the router with all /api prefixed endpoints
-app.include_router(router)
+
 
 @router.get("/")
 async def api_root():
@@ -684,7 +683,9 @@ async def get_news(query: str):
     return {"articles": articles, "source": provider}
 
 
+# Mount router AFTER all routes are defined
+app.include_router(router)
+
 if __name__ == "__main__":
-    # Start the server (Startup Bug Fixed - Final Recovery)
     import uvicorn
     uvicorn.run("main:app", host="0.0.0.0", port=9000)
