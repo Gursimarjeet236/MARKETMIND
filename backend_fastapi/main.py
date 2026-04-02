@@ -70,40 +70,43 @@ async def startup_event():
         # 1. Try Postgres (for Render/Production persistence)
         db_url = os.getenv("DATABASE_URL") or os.getenv("POSTGRES_URL")
         if POSTGRES_AVAILABLE and db_url:
-            print("[Startup] Connecting to Postgres...")
-            import psycopg
-            # Store a single async connection for thread/user queries
-            app.state.db_conn = await psycopg.AsyncConnection.connect(db_url, autocommit=True)
+            print("[Startup] Connecting to Postgres pool...")
             app.state.db_pool = AsyncConnectionPool(
                 conninfo=db_url,
-                max_size=10, 
-                kwargs={"autocommit": True}
+                min_size=1,
+                max_size=5,
+                open=False,
             )
+            await app.state.db_pool.open(wait=True, timeout=30)
+            print("[Startup] Pool opened.")
+
             # Initialize Postgres Checkpointer
             memory = AsyncPostgresSaver(app.state.db_pool)
-            await memory.setup() 
+            await memory.setup()
             app.state.agent = get_agent(checkpointer=memory)
-            
-            # Initialize Custom Tables in Postgres
-            await app.state.db_conn.execute("""
-                CREATE TABLE IF NOT EXISTS users (
-                    id TEXT PRIMARY KEY,
-                    email TEXT UNIQUE,
-                    password_hash TEXT,
-                    name TEXT,
-                    avatar TEXT,
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                )
-            """)
-            await app.state.db_conn.execute("""
-                CREATE TABLE IF NOT EXISTS threads (
-                    id TEXT PRIMARY KEY,
-                    title TEXT,
-                    user_id TEXT,
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                )
-            """)
+
+            # Initialize Custom Tables using pool connection
+            async with app.state.db_pool.connection() as conn:
+                await conn.execute("""
+                    CREATE TABLE IF NOT EXISTS users (
+                        id TEXT PRIMARY KEY,
+                        email TEXT UNIQUE,
+                        password_hash TEXT,
+                        name TEXT,
+                        avatar TEXT,
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                    )
+                """)
+                await conn.execute("""
+                    CREATE TABLE IF NOT EXISTS threads (
+                        id TEXT PRIMARY KEY,
+                        title TEXT,
+                        user_id TEXT,
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                    )
+                """)
+            app.state.db_conn = None   # not used in postgres mode
             app.state.db_type = "postgres"
             print("[Startup] Agent initialized with AsyncPostgresSaver")
             return
@@ -113,10 +116,10 @@ async def startup_event():
         os.makedirs("data", exist_ok=True)
         db_path = "data/memory.sqlite"
         app.state.db_conn = await aiosqlite.connect(db_path)
+        app.state.db_pool = None
         memory = AsyncSqliteSaver(app.state.db_conn)
         app.state.agent = get_agent(checkpointer=memory)
-        
-        # Initialize SQLite Tables
+
         await app.state.db_conn.execute("""
             CREATE TABLE IF NOT EXISTS users (id TEXT PRIMARY KEY, email TEXT UNIQUE, password_hash TEXT, name TEXT, avatar TEXT, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)
         """)
@@ -126,16 +129,15 @@ async def startup_event():
         await app.state.db_conn.commit()
         app.state.db_type = "sqlite"
         print("[Startup] Agent initialized with AsyncSqliteSaver")
-        
+
     except Exception as e:
         print(f"[Startup] ERROR during initialization: {e}")
         import traceback
         traceback.print_exc()
         app.state.agent = get_agent(checkpointer=None)
         app.state.db_type = "none"
-        # Set db_conn to None to prevent AttributeError in routes
-        if not hasattr(app.state, "db_conn"):
-            app.state.db_conn = None
+        app.state.db_conn = None
+        app.state.db_pool = None
 
 @app.on_event("shutdown")
 async def shutdown_event():
@@ -151,43 +153,39 @@ def _pg_query(sql: str) -> str:
     return sql.replace("?", "%s")
 
 async def db_execute(sql: str, params: tuple = ()):
-    """Execute a write query on the active database connection."""
-    db = app.state.db_conn
-    if db is None:
-        return
+    """Execute a write query."""
     if app.state.db_type == "postgres":
-        await db.execute(_pg_query(sql), params)
-    else:
-        await db.execute(sql, params)
+        async with app.state.db_pool.connection() as conn:
+            await conn.execute(_pg_query(sql), params)
+    elif app.state.db_conn:
+        await app.state.db_conn.execute(sql, params)
 
 async def db_commit():
-    """Commit if using SQLite (Postgres is autocommit)."""
+    """Commit if using SQLite (Postgres pool auto-commits)."""
     if app.state.db_type != "postgres" and app.state.db_conn:
         await app.state.db_conn.commit()
 
 async def db_fetchall(sql: str, params: tuple = ()) -> list:
     """Execute a SELECT and return all rows."""
-    db = app.state.db_conn
-    if db is None:
-        return []
     if app.state.db_type == "postgres":
-        cursor = await db.execute(_pg_query(sql), params)
-        return await cursor.fetchall()
-    else:
-        async with db.execute(sql, params) as cursor:
+        async with app.state.db_pool.connection() as conn:
+            cursor = await conn.execute(_pg_query(sql), params)
             return await cursor.fetchall()
+    elif app.state.db_conn:
+        async with app.state.db_conn.execute(sql, params) as cursor:
+            return await cursor.fetchall()
+    return []
 
 async def db_fetchone(sql: str, params: tuple = ()):
     """Execute a SELECT and return one row."""
-    db = app.state.db_conn
-    if db is None:
-        return None
     if app.state.db_type == "postgres":
-        cursor = await db.execute(_pg_query(sql), params)
-        return await cursor.fetchone()
-    else:
-        async with db.execute(sql, params) as cursor:
+        async with app.state.db_pool.connection() as conn:
+            cursor = await conn.execute(_pg_query(sql), params)
             return await cursor.fetchone()
+    elif app.state.db_conn:
+        async with app.state.db_conn.execute(sql, params) as cursor:
+            return await cursor.fetchone()
+    return None
 
 class ChatRequest(BaseModel):
     message: str
