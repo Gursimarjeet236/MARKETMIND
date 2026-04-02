@@ -1,0 +1,26 @@
+[project]
+name = "marketmind"
+version = "0.1.0"
+requires-python = ">=3.12,<3.13"
+dependencies = [
+    "fastapi",
+    "pydantic",
+    "python-dotenv",
+    "aiosqlite",
+    "psycopg-binary",
+    "langgraph",
+    "langgraph-checkpoint-postgres",
+    "langgraph-checkpoint-sqlite",
+    "langchain-core",
+    "langchain-groq",
+    "duckduckgo-search",
+    "httpx",
+    "passlib[argon2]",
+    "tensorflow-cpu==2.15.0",
+    "numpy",
+    "pandas",
+    "scikit-learn",
+    "vmdpy",
+    "yfinance",
+    "scipy",
+]
