@@ -7,14 +7,14 @@ export function AuthProvider({ children }) {
     const [user, setUser] = useState(null);
     const [session, setSession] = useState(null);
     const [loading, setLoading] = useState(false);
-    const API_URL = import.meta.env.VITE_API_URL || '/api';
+    const BACKEND_URL = import.meta.env.VITE_API_URL || '';
     // Stores a callback to notify callers (e.g. Auth.jsx) when Google auth finishes
     // for ANY reason: success, error, or the user closing/cancelling the popup.
     const onGoogleCompleteRef = useRef(null);
 
     const signIn = async (email, password) => {
         try {
-            const res = await fetch(`${API_URL}/auth/signin`, {
+            const res = await fetch(`${BACKEND_URL}/api/auth/signin`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ email, password }),
@@ -38,7 +38,7 @@ export function AuthProvider({ children }) {
 
     const signUp = async (email, password, name) => {
         try {
-            const res = await fetch(`${API_URL}/auth/signup`, {
+            const res = await fetch(`${BACKEND_URL}/api/auth/signup`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ email, password, name }),
@@ -78,7 +78,7 @@ export function AuthProvider({ children }) {
                     avatar: googleData.picture
                 };
 
-                const res = await fetch(`${API_URL}/auth/google`, {
+                const res = await fetch(`${BACKEND_URL}/api/auth/google`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify(profile),

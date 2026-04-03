@@ -5,6 +5,7 @@ pydantic
 python-dotenv
 aiosqlite
 psycopg[binary]
+psycopg_pool
 langgraph
 langgraph-checkpoint-postgres
 langgraph-checkpoint-sqlite
