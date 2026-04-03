@@ -20,6 +20,14 @@ import gc
 import yfinance as yf
 from vmdpy import VMD
 import tensorflow as tf
+
+# Limit TensorFlow thread usage to save memory
+try:
+    tf.config.threading.set_inter_op_parallelism_threads(1)
+    tf.config.threading.set_intra_op_parallelism_threads(1)
+except Exception:
+    pass
+
 from dgcgru import gcgru  # custom layer for refined_regcn
 from gcnattn_layers import GCNTemporalAttention, TemporalAttentionBlock  # custom layers for gcnattn
 
@@ -200,6 +208,11 @@ def _predict_stock_internal(symbol: str, variant: str = MODEL_VARIANT) -> dict:
         last_pred_unnorm = unauto_norm(last_pred, float(mins[3]), float(maxs[3]))
         mode_preds.append(last_pred_unnorm)
         summed_pred += last_pred_unnorm
+
+        # Clear memory after each VMD model
+        del model
+        tf.keras.backend.clear_session()
+        gc.collect()
 
     predicted_price = summed_pred
 
