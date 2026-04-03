@@ -412,10 +412,20 @@ async def predict_single(symbol: str, model: str = "refined_regcn"):
             status_code=400,
             detail=f"Unknown model '{model}'. Supported: {', '.join(VARIANT_FILE_PREFIX.keys())}"
         )
+    
+    cache_key = (symbol.upper(), model)
+    now = time.time()
+    
+    if cache_key in _prediction_cache:
+        ts, cached_result = _prediction_cache[cache_key]
+        if now - ts < _PREDICTION_CACHE_TTL:
+            print(f"[Cache HIT] Prediction for {symbol}")
+            return cached_result
     try:
         result = await asyncio.get_event_loop().run_in_executor(
             None, predict_stock, symbol.upper(), model
         )
+        _prediction_cache[cache_key] = (now, result)
         return result
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
@@ -426,13 +436,15 @@ async def predict_single(symbol: str, model: str = "refined_regcn"):
         raise HTTPException(status_code=500, detail=f"Prediction failed: {str(e)}")
 
 
+# 60-minute in-memory cache: { (symbols, model): (timestamp, result) }
+_prediction_cache: dict = {}
+_PREDICTION_CACHE_TTL = 3600  # 1 hour
+
 @router.get("/predictions")
 async def predict_all(symbols: Optional[str] = None, model: str = "refined_regcn"):
     """
     Run predictions for a comma-separated list of symbols (default: featured stocks).
-    E.g. /api/predictions?symbols=AAPL,MSFT&model=gcnattn
-    Optional query param: ?model=refined_regcn (default) or ?model=gcnattn
-    Returns a list of prediction objects for the frontend.
+    Cached for 1 hour to prevent slow load times.
     """
     if model not in VARIANT_FILE_PREFIX:
         raise HTTPException(
@@ -444,6 +456,15 @@ async def predict_all(symbols: Optional[str] = None, model: str = "refined_regcn
     else:
         symbol_list = DJIA_STOCKS[:10]
 
+    cache_key = (",".join(symbol_list), model)
+    now = time.time()
+    
+    if cache_key in _prediction_cache:
+        ts, cached_result = _prediction_cache[cache_key]
+        if now - ts < _PREDICTION_CACHE_TTL:
+            print(f"[Cache HIT] Predictions for {cache_key[0]}")
+            return cached_result
+
     results = []
     errors  = []
     loop = asyncio.get_event_loop()
@@ -451,25 +472,16 @@ async def predict_all(symbols: Optional[str] = None, model: str = "refined_regcn
     for sym in symbol_list:
         try:
             pred = await loop.run_in_executor(None, predict_stock, sym, model)
-            
-            # Fetch strictly fresh price from yfinance specifically as requested
-            try:
-                hist = yf.Ticker(sym).history(period="1d")
-                if not hist.empty:
-                    fresh_price = float(hist['Close'].iloc[-1])
-                    # Recalculate based on fresh price
-                    price_change = pred["predicted_price"] - fresh_price
-                    pred["current_price"] = round(fresh_price, 2)
-                    pred["direction"] = "up" if price_change > 0 else "down"
-                    pred["pct_change"] = round(price_change / (fresh_price + 1e-8) * 100, 2)
-            except Exception as yf_e:
-                print(f"Warning: Failed to fetch fresh yfinance price for {sym}: {yf_e}")
-
+            # We removed the extra yfinance 1d pull to save 1-2 extra seconds per stock, 
+            # since predict_stock already fetches the latest realtime price anyway.
             results.append(pred)
         except Exception as e:
             errors.append({"symbol": sym, "error": str(e)})
 
-    return {"predictions": results, "errors": errors}
+    response_data = {"predictions": results, "errors": errors}
+    _prediction_cache[cache_key] = (now, response_data)
+    
+    return response_data
 
 @router.get("/validate_ticker/{symbol}")
 async def validate_ticker(symbol: str):

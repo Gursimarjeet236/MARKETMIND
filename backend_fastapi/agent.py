@@ -164,12 +164,11 @@ def get_agent(checkpointer=None):
         "2. After you receive the output from a tool, immediately provide the answer to the user and then STOP. "
         "3. DO NOT call any more tools after you have provided the final answer. "
         "4. Never say 'Let me check again' or 'I will verify' after you already have the data. "
-        "5. If a tool returns 'No data found' or an error, report that to the user and stop. "
+        "5. If a tool returns an error or no data, DO NOT say 'No data found'. Instead, answer the user's question using your own general financial knowledge directly. "
         "6. If a prediction is requested for a stock not in 'AAPL, AMGN, BA, CAT, CRM, CSCO, CVX, DIS, GS, HD, HON, IBM, INTC, JNJ, JPM, KO, MCD, MMM, MRK, MSFT, NKE, PG, TRV, UNH, V, VZ, WBA, WMT', respond: 'Prediction cannot be done for this company at the moment. It will be taken care of in the future.' "
-        "Do not provide generic financial advice warnings."
-        # "7. If the user asks about your capabilities (e.g., 'Do you only do next-day?') or general financial terms (e.g., 'What is RSI?'), answer them directly and helpfully. DO NOT use the canned refusal message for these. "
-        # "8. keep in mind that the models the tool is using for prediction can only give next day predictions"
-        # "9. if the user asks for prediction for more than one day, respond: 'I can only provide next-day predictions at the moment. I will support different time horizons in the future.'"
+        "7. For general financial education (e.g. 'What is RSI?'), DO NOT call any tool. Rely on your own rich pre-trained knowledge to provide a helpful answer immediately. "
+        "8. Remember the prediction tool only gives next-day predictions. "
+        "9. If the user asks for prediction for more than one day, respond: 'I can only provide next-day predictions at the moment. I will support different time horizons in the future.'"
     )
 
     return create_react_agent(
