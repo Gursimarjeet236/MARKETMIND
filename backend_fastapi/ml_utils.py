@@ -15,6 +15,8 @@ NOTE: No external .npy adjacency files are needed at inference time.
 import os
 import glob
 import numpy as np
+import threading
+import gc
 import yfinance as yf
 from vmdpy import VMD
 import tensorflow as tf
@@ -116,24 +118,17 @@ def normalize_mode(mode_data: np.ndarray):
     return normalized, mins, maxs
 
 
-# ── Model loader (lazily cached) ─────────────────────────────────────────────
-_model_cache: dict = {}
-
+# ── Model loader (uncached to respect 512MB RAM limit) ───────────
 def load_model(stock_idx: int, vmd_idx: int, variant: str = MODEL_VARIANT) -> tf.keras.Model:
     """
-    Load and cache a specific stock/vmd keras model.
-    e.g. models/refined_regcn/model_proposed_stock0_vmd0.keras
+    Load a specific stock/vmd keras model on-demand. Memory is cleared afterwards.
     """
-    key = (stock_idx, vmd_idx, variant)
-    if key not in _model_cache:
-        prefix       = VARIANT_FILE_PREFIX.get(variant, f"model_{variant}")
-        model_path   = os.path.join(MODELS_DIR, variant, f"{prefix}_stock{stock_idx}_vmd{vmd_idx}.keras")
-        custom_objs  = VARIANT_CUSTOM_OBJECTS.get(variant, {})
-        if not os.path.exists(model_path):
-            raise FileNotFoundError(f"Model not found: {model_path}")
-        model = tf.keras.models.load_model(model_path, custom_objects=custom_objs)
-        _model_cache[key] = model
-    return _model_cache[key]
+    prefix       = VARIANT_FILE_PREFIX.get(variant, f"model_{variant}")
+    model_path   = os.path.join(MODELS_DIR, variant, f"{prefix}_stock{stock_idx}_vmd{vmd_idx}.keras")
+    custom_objs  = VARIANT_CUSTOM_OBJECTS.get(variant, {})
+    if not os.path.exists(model_path):
+        raise FileNotFoundError(f"Model not found: {model_path}")
+    return tf.keras.models.load_model(model_path, custom_objects=custom_objs)
 
 
 # ── Discover how many VMD models exist for a stock ──────────────────────────
@@ -147,7 +142,7 @@ def count_vmd_models(stock_idx: int, variant: str = MODEL_VARIANT) -> int:
 
 
 # ── Main prediction function ─────────────────────────────────────────────────
-def predict_stock(symbol: str, variant: str = MODEL_VARIANT) -> dict:
+def _predict_stock_internal(symbol: str, variant: str = MODEL_VARIANT) -> dict:
     """
     Run the full inference pipeline for a given stock symbol.
     Returns a dict with: symbol, current_price, predicted_price, direction, confidence.
@@ -258,3 +253,13 @@ def predict_stock(symbol: str, variant: str = MODEL_VARIANT) -> dict:
         "confidence":      confidence,
         "pct_change":      round(price_change / (current_price + 1e-8) * 100, 2),
     }
+
+_prediction_lock = threading.Lock()
+
+def predict_stock(symbol: str, variant: str = MODEL_VARIANT) -> dict:
+    with _prediction_lock:
+        try:
+            return _predict_stock_internal(symbol, variant)
+        finally:
+            tf.keras.backend.clear_session()
+            gc.collect()
