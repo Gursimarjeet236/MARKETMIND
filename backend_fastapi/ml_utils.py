@@ -21,6 +21,12 @@ import yfinance as yf
 from vmdpy import VMD
 import tensorflow as tf
 
+# Global LRU-style cache for models to prevent repeated disk I/O
+# Since models are <1MB, we can cache many of them.
+_MODEL_CACHE = {}
+_MODEL_CACHE_LOCK = threading.Lock()
+
+
 # Limit TensorFlow thread usage to save memory
 try:
     tf.config.threading.set_inter_op_parallelism_threads(1)
@@ -129,14 +135,30 @@ def normalize_mode(mode_data: np.ndarray):
 # ── Model loader (uncached to respect 512MB RAM limit) ───────────
 def load_model(stock_idx: int, vmd_idx: int, variant: str = MODEL_VARIANT) -> tf.keras.Model:
     """
-    Load a specific stock/vmd keras model on-demand. Memory is cleared afterwards.
+    Load a specific stock/vmd keras model with in-memory caching.
     """
+    cache_key = (variant, stock_idx, vmd_idx)
+    
+    # 1. Check Cache
+    with _MODEL_CACHE_LOCK:
+        if cache_key in _MODEL_CACHE:
+            return _MODEL_CACHE[cache_key]
+
+    # 2. Load from Disk
     prefix       = VARIANT_FILE_PREFIX.get(variant, f"model_{variant}")
     model_path   = os.path.join(MODELS_DIR, variant, f"{prefix}_stock{stock_idx}_vmd{vmd_idx}.keras")
     custom_objs  = VARIANT_CUSTOM_OBJECTS.get(variant, {})
     if not os.path.exists(model_path):
         raise FileNotFoundError(f"Model not found: {model_path}")
-    return tf.keras.models.load_model(model_path, custom_objects=custom_objs)
+    
+    print(f"[ml_utils] Cache MISS: Loading {model_path}")
+    model = tf.keras.models.load_model(model_path, custom_objects=custom_objs)
+    
+    # 3. Store in Cache
+    with _MODEL_CACHE_LOCK:
+        _MODEL_CACHE[cache_key] = model
+        
+    return model
 
 
 # ── Discover how many VMD models exist for a stock ──────────────────────────
@@ -150,14 +172,15 @@ def count_vmd_models(stock_idx: int, variant: str = MODEL_VARIANT) -> int:
 
 
 # ── Main prediction function ─────────────────────────────────────────────────
-def _predict_stock_internal(symbol: str, variant: str = MODEL_VARIANT) -> dict:
+def _predict_stock_internal(symbol: str, variant: str = MODEL_VARIANT, raw_data: np.ndarray = None) -> dict:
     """
     Run the full inference pipeline for a given stock symbol.
     Returns a dict with: symbol, current_price, predicted_price, direction, confidence.
 
     Args:
-        symbol:  DJIA ticker (e.g. "AAPL")
-        variant: Model variant — "refined_regcn" or "gcnattn"
+        symbol:   DJIA ticker (e.g. "AAPL")
+        variant:  Model variant — "refined_regcn" or "gcnattn"
+        raw_data: Optional pre-fetched OHLCV data (shape 30, 6).
     """
     symbol  = symbol.upper()
     variant = variant.lower()
@@ -180,8 +203,10 @@ def _predict_stock_internal(symbol: str, variant: str = MODEL_VARIANT) -> dict:
             f"No trained models found for {symbol} (stock{stock_idx}, variant={variant})"
         )
 
-    # 1. Fetch live data (seq_len rows)
-    raw_data      = fetch_live_data(symbol, SEQ_LEN)           # (30, 6)
+    # 1. Fetch live data (seq_len rows) if not provided
+    if raw_data is None:
+        raw_data = fetch_live_data(symbol, SEQ_LEN)           # (30, 6)
+    
     current_price = float(raw_data[-1, 3])                     # last Close price
 
     # 2. VMD decomposition (K = n_vmd)
@@ -209,10 +234,7 @@ def _predict_stock_internal(symbol: str, variant: str = MODEL_VARIANT) -> dict:
         mode_preds.append(last_pred_unnorm)
         summed_pred += last_pred_unnorm
 
-        # Clear memory after each VMD model
-        del model
-        tf.keras.backend.clear_session()
-        gc.collect()
+        # REMOVED: del model and clear_session here to allow caching
 
     predicted_price = summed_pred
 
@@ -269,10 +291,8 @@ def _predict_stock_internal(symbol: str, variant: str = MODEL_VARIANT) -> dict:
 
 _prediction_lock = threading.Lock()
 
-def predict_stock(symbol: str, variant: str = MODEL_VARIANT) -> dict:
+def predict_stock(symbol: str, variant: str = MODEL_VARIANT, raw_data: np.ndarray = None) -> dict:
     with _prediction_lock:
-        try:
-            return _predict_stock_internal(symbol, variant)
-        finally:
-            tf.keras.backend.clear_session()
-            gc.collect()
+        return _predict_stock_internal(symbol, variant, raw_data=raw_data)
+        # Note: We no longer clear session here to preserve the model cache.
+        # We rely on os-level memory management or manual pruning if needed.

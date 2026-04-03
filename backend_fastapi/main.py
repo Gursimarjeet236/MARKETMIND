@@ -24,7 +24,7 @@ import sys
 from agent import get_agent
 
 # ML Prediction imports
-from ml_utils import predict_stock, DJIA_STOCKS, VARIANT_FILE_PREFIX
+from ml_utils import predict_stock, fetch_live_data, SEQ_LEN, DJIA_STOCKS, VARIANT_FILE_PREFIX
 
 from passlib.context import CryptContext
 from duckduckgo_search import DDGS
@@ -396,7 +396,15 @@ async def chat_endpoint(request: ChatRequest):
             traceback.print_exc()
             yield f"Error: {str(e)}"
 
-    return StreamingResponse(event_generator(), media_type="text/plain")
+    return StreamingResponse(
+        event_generator(), 
+        media_type="text/plain",
+        headers={
+            "X-Accel-Buffering": "no",
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+        }
+    )
 
 # --- ML Prediction Endpoints ---
 
@@ -469,14 +477,27 @@ async def predict_all(symbols: Optional[str] = None, model: str = "refined_regcn
     errors  = []
     loop = asyncio.get_event_loop()
 
+    # 1. Fetch data for all symbols in parallel (I/O bound)
+    # This happens outside the ML inference lock to maximize speed.
+    fetch_tasks = []
     for sym in symbol_list:
+        fetch_tasks.append(loop.run_in_executor(None, fetch_live_data, sym, SEQ_LEN))
+    
+    raw_data_results = await asyncio.gather(*fetch_tasks, return_exceptions=True)
+
+    # 2. Run inference (CPU bound)
+    # We pass the pre-fetched data to predict_stock.
+    for i, sym in enumerate(symbol_list):
+        data = raw_data_results[i]
+        if isinstance(data, Exception):
+            errors.append({"symbol": sym, "error": f"Data fetch failed: {str(data)}"})
+            continue
+
         try:
-            pred = await loop.run_in_executor(None, predict_stock, sym, model)
-            # We removed the extra yfinance 1d pull to save 1-2 extra seconds per stock, 
-            # since predict_stock already fetches the latest realtime price anyway.
+            pred = await loop.run_in_executor(None, predict_stock, sym, model, data)
             results.append(pred)
         except Exception as e:
-            errors.append({"symbol": sym, "error": str(e)})
+            errors.append({"symbol": sym, "error": f"Inference failed: {str(e)}"})
 
     response_data = {"predictions": results, "errors": errors}
     _prediction_cache[cache_key] = (now, response_data)

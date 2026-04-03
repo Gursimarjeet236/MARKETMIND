@@ -144,7 +144,8 @@ tools = [
 
 chat_model = ChatGroq(
     model="llama-3.1-8b-instant",
-    temperature=0
+    temperature=0,
+    streaming=True
 )
 
 # --------------------------------
