@@ -1,75 +1,128 @@
-# Market-lens
+# MarketMind
 
-Market-lens is a comprehensive financial market analysis platform designed to provide traders and investors with real-time insights, news, and predictive analytics. Built with a modern tech stack, it offers a seamless and interactive user experience.
+MarketMind is a modern financial dashboard and research platform that brings market data, news, ML-driven predictions, and an AI chat assistant into a single experience.
 
-## Features
+## What it is
 
-- **📊 Interactive Dashboard**: Get a high-level overview of market performance and key metrics at a glance.
-- **📈 Real-time Charts**: Advanced charting capabilities to track stock prices and market trends in real-time.
-- **📰 Financial News**: Stay updated with the latest financial news and sentiment analysis to make informed decisions.
-- **🔮 Market Predictions**: Leverage predictive analytics to anticipate market movements.
-- **🤖 AI Assistant**: Context-aware AI assistant to answer your market-related queries.
-- **🔐 Secure Authentication**: User accounts and secure login functionality.
-- **🌓 Dark/Light Mode**: Fully responsive design with theme support.
+MarketMind combines:
+- a React + Vite frontend with Tailwind styling,
+- a Python FastAPI backend for news, stock prediction, and AI conversational flows,
+- a Node.js + Express backend for authentication, stock lookup, and MongoDB persistence.
+
+This project is built for traders and investors who want a dashboard with fast market summaries, AI guidance, and next-day stock forecasts.
+
+## Key Features
+
+- **Dashboard & Market Overview**
+- **Company news + sentiment analysis**
+- **Next-day stock predictions** using TensorFlow models
+- **AI assistant** powered by a LangGraph-based agent
+- **User authentication** with email/password and Google sign-in support
+- **Responsive UI** with dark/light theme support
 
 ## Tech Stack
 
-- **Frontend**: React, Vite, Tailwind CSS, Shadcn UI
-- **Backend**: Node.js, Express (inferred structure)
-- **Database**: MongoDB (via Mongoose)
-- **State Management**: React Context API
-- **Routing**: React Router DOM
+- Frontend: React, Vite, Tailwind CSS
+- Primary backend: Python, FastAPI, Uvicorn
+- Secondary backend: Node.js, Express, Mongoose, MongoDB
+- ML / data: TensorFlow, yfinance, Alpha Vantage, NewsAPI, DuckDuckGo
+- Auth: JSON Web Tokens, bcrypt
 
 ## Getting Started
 
-Follow these steps to set up the project locally.
-
 ### Prerequisites
 
-- Node.js (v18 or higher recommended)
-- npm (Node Package Manager)
+- Node.js 18+ and npm
+- Python 3.12+ and a virtual environment
+- MongoDB (for the Node backend)
 
-### Installation
+### Install dependencies
 
-1.  **Clone the repository:**
+```bash
+npm install
+```
 
-    ```bash
-    git clone <repository_url>
-    cd market-lens
-    ```
+Then create and activate a Python virtual environment, and install Python dependencies:
 
-2.  **Install dependencies:**
+```bash
+cd backend_fastapi
+python -m venv .venv
+.venv\Scripts\activate
+pip install -r requirements.txt
+cd ..
+```
 
-    ```bash
-    npm install
-    ```
+### Environment variables
 
-3.  **Environment Setup:**
-    
-    Create a `.env` file in the root directory and add necessary environment variables (e.g., API keys, Database URLs).
+Create a `.env` file in the project root and add values for at least:
 
-4.  **Run the Development Server:**
+```env
+MONGODB_URI=mongodb://localhost:27017/marketmind
+JWT_SECRET=your_jwt_secret
+ALPHA_VANTAGE_API_KEY=your_alpha_vantage_key
+NEWS_API_KEY=your_news_api_key
+VITE_API_URL=
+```
 
-    ```bash
-    npm run dev
-    ```
+For the Python backend, optional variables include `DATABASE_URL` / `POSTGRES_URL` if you prefer Postgres over SQLite.
 
-    The application will be available at `http://localhost:8080` (or similar, check console output).
+### Run locally
 
-## Scripts
+Start the frontend and FastAPI backend together:
 
-- `npm run dev`: Start the development server.
-- `npm run build`: Build the application for production.
-- `npm run lint`: Run ESLint to check for code quality issues.
-- `npm run preview`: Preview the production build locally.
+```bash
+npm run dev
+```
+
+This starts:
+- frontend on `http://localhost:8080`
+- FastAPI backend on `http://localhost:9000`
+
+If you want the Node/Express auth + stock API, start it separately:
+
+```bash
+node server/index.js
+```
+
+### Verify endpoints
+
+- `GET http://localhost:8080` → frontend app
+- `POST http://localhost:5000/api/auth/signin` → auth
+- `GET http://localhost:9000/api/news/market` → news endpoint
+- `GET http://localhost:9000/api/predict/AAPL` → prediction endpoint
+
+## Architecture Overview
+
+- `src/` contains the React app and UI pages
+- `backend_fastapi/` contains the Python API, ML utilities, and AI assistant
+- `server/` contains the Node/Express auth & MongoDB service
+
+Frontend API routing is configured in `vite.config.js`:
+- `/api/auth` and `/api/stocks` proxy to the Node backend
+- `/api/*` proxies to the FastAPI backend
+
+## Notes
+
+- News search uses a provider chain: Alpha Vantage → NewsAPI → DuckDuckGo fallback.
+- Prediction endpoints are cached in memory to reduce repeated model loads.
+- The AI assistant is streamed via FastAPI and a LangGraph agent.
+
+## Useful scripts
+
+- `npm run dev` — start the frontend and FastAPI backend
+- `npm run build` — build the React app for production
+- `npm run preview` — preview the production build locally
+- `npm run lint` — run ESLint for code quality
 
 ## Project Structure
 
-- `src/components`: Reusable UI components.
-- `src/pages`: Application views/routes (Dashboard, News, Charts, etc.).
-- `src/contexts`: React Context definitions (e.g., AuthContext).
-- `server`: Backend server code (APIs, Models).
+- `src/` — React app
+- `server/` — Node/Express auth, stock, and news API code
+- `backend_fastapi/` — Python AI + prediction backend
+- `public/` — static app assets
+- `package.json` — frontend and root scripts
+- `pyproject.toml` — Python project metadata
 
-## Contributing
+---
 
-Contributions are welcome! Please feel free to submit a Pull Request.
+Built for fast market intelligence, predictive insight, and an intelligent assistant experience.
