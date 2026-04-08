@@ -7,10 +7,34 @@ yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
 
-node_modules
-dist
-dist-ssr
+# Dependency directories
+node_modules/
+
+# Build output
+dist/
+build/
+dist-ssr/
+
+# Environment and secret files
+.env
+.env.*
 *.local
+
+# Python artifacts
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+venv/
+backend_fastapi/.venv/
+
+# Database and local storage
+*.sqlite
+*.sqlite3
+*.db
+*.db-shm
+*.db-wal
+backend_fastapi/data/
 
 # Editor directories and files
 .vscode/*
@@ -22,3 +46,8 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# OS files
+Thumbs.db
+ehthumbs.db
+Desktop.ini

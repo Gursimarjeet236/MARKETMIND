@@ -1,75 +1,108 @@
-# Market-lens
+# MarketMind
 
-Market-lens is a comprehensive financial market analysis platform designed to provide traders and investors with real-time insights, news, and predictive analytics. Built with a modern tech stack, it offers a seamless and interactive user experience.
+MarketMind is a financial analytics platform combining market dashboards, news sentiment, ML-powered stock forecasts, and an AI assistant into a unified user experience.
 
-## Features
+## What it includes
 
-- **📊 Interactive Dashboard**: Get a high-level overview of market performance and key metrics at a glance.
-- **📈 Real-time Charts**: Advanced charting capabilities to track stock prices and market trends in real-time.
-- **📰 Financial News**: Stay updated with the latest financial news and sentiment analysis to make informed decisions.
-- **🔮 Market Predictions**: Leverage predictive analytics to anticipate market movements.
-- **🤖 AI Assistant**: Context-aware AI assistant to answer your market-related queries.
-- **🔐 Secure Authentication**: User accounts and secure login functionality.
-- **🌓 Dark/Light Mode**: Fully responsive design with theme support.
+- **Market dashboard** with stock and sentiment summaries
+- **News search** with provider fallback for Alpha Vantage, NewsAPI, and DuckDuckGo
+- **Next-day stock prediction** using TensorFlow models
+- **AI conversation assistant** powered by LangGraph and FastAPI
+- **User auth support** with JWT-based sign-in and Google login flows
+- **Responsive UI** built with React, Vite, and Tailwind CSS
 
-## Tech Stack
+## Tech stack
 
-- **Frontend**: React, Vite, Tailwind CSS, Shadcn UI
-- **Backend**: Node.js, Express (inferred structure)
-- **Database**: MongoDB (via Mongoose)
-- **State Management**: React Context API
-- **Routing**: React Router DOM
+- Frontend: React, Vite, Tailwind CSS
+- Backend API: Python FastAPI, Uvicorn
+- Optional backend service: Node.js, Express, Mongoose, MongoDB
+- ML: TensorFlow, yfinance, scikit-learn, fastdtw, vmdpy
+- Auth: JWT, bcrypt, Google OAuth helper
 
-## Getting Started
-
-Follow these steps to set up the project locally.
+## Setup
 
 ### Prerequisites
 
-- Node.js (v18 or higher recommended)
-- npm (Node Package Manager)
+- Node.js 18+ and npm
+- Python 3.12+
+- PostgreSQL or SQLite for the FastAPI backend
+- MongoDB if you use the optional Node/Express service
 
-### Installation
+### Install dependencies
 
-1.  **Clone the repository:**
+```bash
+npm install
+```
 
-    ```bash
-    git clone <repository_url>
-    cd market-lens
-    ```
+Create a Python virtual environment and install backend requirements:
 
-2.  **Install dependencies:**
+```bash
+python -m venv venv
+venv\Scripts\activate
+pip install -r backend_fastapi/requirements.txt
+```
 
-    ```bash
-    npm install
-    ```
+### Environment variables
 
-3.  **Environment Setup:**
-    
-    Create a `.env` file in the root directory and add necessary environment variables (e.g., API keys, Database URLs).
+Create a `.env` file in the project root with values such as:
 
-4.  **Run the Development Server:**
+```env
+DATABASE_URL=postgres://user:pass@localhost:5432/marketmind
+ALPHA_VANTAGE_API_KEY=your_alpha_vantage_key
+NEWS_API_KEY=your_news_api_key
+JWT_SECRET=your_jwt_secret
+MONGODB_URI=mongodb://localhost:27017/marketmind
+VITE_API_URL=
+```
 
-    ```bash
-    npm run dev
-    ```
+If you use a different Python virtual environment name or path, update the `backend` script in `package.json` or launch FastAPI directly.
 
-    The application will be available at `http://localhost:8080` (or similar, check console output).
+### Run locally
 
-## Scripts
+```bash
+npm run dev
+```
 
-- `npm run dev`: Start the development server.
-- `npm run build`: Build the application for production.
-- `npm run lint`: Run ESLint to check for code quality issues.
-- `npm run preview`: Preview the production build locally.
+This starts:
+- frontend on `http://localhost:8080`
+- FastAPI backend on `http://localhost:9000`
 
-## Project Structure
+If needed, start the FastAPI backend directly from `backend_fastapi`:
 
-- `src/components`: Reusable UI components.
-- `src/pages`: Application views/routes (Dashboard, News, Charts, etc.).
-- `src/contexts`: React Context definitions (e.g., AuthContext).
-- `server`: Backend server code (APIs, Models).
+```bash
+cd backend_fastapi
+python -m uvicorn main:app --host 0.0.0.0 --port 9000 --reload
+```
 
-## Contributing
+### Optional Node backend
 
-Contributions are welcome! Please feel free to submit a Pull Request.
+The `server/` directory contains an Express/MongoDB service for auth, stock, and news routes. Start it manually if you use those APIs:
+
+```bash
+node server/index.js
+```
+
+## Useful scripts
+
+- `npm run dev` — start frontend and FastAPI backend together
+- `npm run build` — build the React app for production
+- `npm run preview` — preview the production build locally
+- `npm run lint` — run ESLint for code checks
+
+## Project structure
+
+- `src/` — React application code
+- `backend_fastapi/` — Python FastAPI backend, ML utilities, and AI agent
+- `server/` — Node/Express auth and API service
+- `public/` — static frontend assets
+- `Dockerfile.frontend`, `docker-compose.yml`, `k8s/` — optional deployment tooling
+
+## Notes
+
+- News search falls back automatically between providers when results are missing.
+- Stock prediction endpoints are cached for better performance.
+- The AI assistant is streamed from FastAPI for responsive chat experiences.
+
+---
+
+Built to provide fast market intelligence, predictions, news, and AI guidance in one app.
