@@ -67,3 +67,9 @@ yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
+
+backend_fastapi/models/refined_regcn/
+backend_fastapi/models/gcnattn/
+backend_fastapi/models/temp_saved_model/
+backend_fastapi/models/test_output.onnx
+backend_fastapi/models/test_in_process.onnx

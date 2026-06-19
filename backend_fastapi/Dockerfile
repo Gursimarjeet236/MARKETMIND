@@ -4,7 +4,7 @@ FROM python:3.11-slim AS builder
 # Set working directory
 WORKDIR /app
 
-# Install build tools needed for compiling heavy packages (e.g., TensorFlow)
+# Install build tools needed for compiling packages
 RUN apt-get update && apt-get install -y \
     gcc \
     g++ \

@@ -9,7 +9,6 @@ psycopg_pool
 langgraph
 langgraph-checkpoint-postgres
 langgraph-checkpoint-sqlite
-langchain-huggingface
 langchain-core
 langchain-groq
 duckduckgo-search
@@ -18,11 +17,9 @@ httpx
 passlib[argon2]
 
 # ML / Prediction dependencies
-tensorflow-cpu==2.16.1
+onnxruntime>=1.16.0
 numpy
 pandas
-scikit-learn
 vmdpy
 yfinance
-fastdtw
 scipy

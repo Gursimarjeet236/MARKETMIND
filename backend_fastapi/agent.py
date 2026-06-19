@@ -1,10 +1,7 @@
 import os
-os.environ["TF_CPP_MIN_LOG_LEVEL"] = "3"
-os.environ["TF_ENABLE_ONEDNN_OPTS"] = "0"
 import warnings
 warnings.filterwarnings("ignore")
 import logging
-logging.getLogger("tensorflow").setLevel(logging.ERROR)
 import requests
 from dotenv import load_dotenv
 from langchain_core.tools import tool
