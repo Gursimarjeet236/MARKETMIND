@@ -1,5 +1,6 @@
 
 import { BrowserRouter, Routes, Route, useLocation } from "react-router-dom";
+import { Analytics } from "@vercel/analytics/react";
 import { Navbar } from "@/components/layout/Navbar";
 import { Footer } from "@/components/layout/Footer";
 import { AuthProvider } from "@/contexts/AuthContext";
@@ -44,6 +45,7 @@ const App = () => {
                         </Routes>
                     </Layout>
                 </BrowserRouter>
+                <Analytics />
             </AuthProvider>
         </ThemeProvider>
     );
