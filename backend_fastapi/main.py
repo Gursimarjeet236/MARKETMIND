@@ -87,25 +87,26 @@ async def startup_event():
 
             # Initialize Custom Tables using pool connection
             async with app.state.db_pool.connection() as conn:
-                await conn.execute("""
-                    CREATE TABLE IF NOT EXISTS users (
-                        id TEXT PRIMARY KEY,
-                        email TEXT UNIQUE,
-                        password_hash TEXT,
-                        name TEXT,
-                        avatar TEXT,
-                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                    )
-                """)
-                await conn.execute("""
-                    CREATE TABLE IF NOT EXISTS threads (
-                        id TEXT PRIMARY KEY,
-                        title TEXT,
-                        user_id TEXT,
-                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                    )
-                """)
+                async with conn.transaction():
+                    await conn.execute("""
+                        CREATE TABLE IF NOT EXISTS users (
+                            id TEXT PRIMARY KEY,
+                            email TEXT UNIQUE,
+                            password_hash TEXT,
+                            name TEXT,
+                            avatar TEXT,
+                            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                        )
+                    """)
+                    await conn.execute("""
+                        CREATE TABLE IF NOT EXISTS threads (
+                            id TEXT PRIMARY KEY,
+                            title TEXT,
+                            user_id TEXT,
+                            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                        )
+                    """)
             app.state.db_conn = None   # not used in postgres mode
             app.state.db_type = "postgres"
             print("[Startup] Agent initialized with AsyncPostgresSaver")
@@ -156,7 +157,8 @@ async def db_execute(sql: str, params: tuple = ()):
     """Execute a write query."""
     if app.state.db_type == "postgres":
         async with app.state.db_pool.connection() as conn:
-            await conn.execute(_pg_query(sql), params)
+            async with conn.transaction():
+                await conn.execute(_pg_query(sql), params)
     elif app.state.db_conn:
         await app.state.db_conn.execute(sql, params)
 
