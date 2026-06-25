@@ -1,0 +1,7 @@
+# Exclude Python backend and scripts from Vercel deployments
+api/python_app.py
+backend_fastapi/
+venv/
+.venv/
+pyproject.toml
+.python-version
