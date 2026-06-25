@@ -11,6 +11,7 @@ import aiosqlite
 from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver
 try:
     from psycopg_pool import AsyncConnectionPool
+    from psycopg.rows import dict_row, tuple_row
     from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
     POSTGRES_AVAILABLE = True
 except ImportError:
@@ -76,6 +77,7 @@ async def startup_event():
                 min_size=1,
                 max_size=5,
                 open=False,
+                kwargs={"autocommit": True, "row_factory": dict_row}
             )
             await app.state.db_pool.open(wait=True, timeout=30)
             print("[Startup] Pool opened.")
@@ -87,26 +89,25 @@ async def startup_event():
 
             # Initialize Custom Tables using pool connection
             async with app.state.db_pool.connection() as conn:
-                async with conn.transaction():
-                    await conn.execute("""
-                        CREATE TABLE IF NOT EXISTS users (
-                            id TEXT PRIMARY KEY,
-                            email TEXT UNIQUE,
-                            password_hash TEXT,
-                            name TEXT,
-                            avatar TEXT,
-                            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                        )
-                    """)
-                    await conn.execute("""
-                        CREATE TABLE IF NOT EXISTS threads (
-                            id TEXT PRIMARY KEY,
-                            title TEXT,
-                            user_id TEXT,
-                            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                        )
-                    """)
+                await conn.execute("""
+                    CREATE TABLE IF NOT EXISTS users (
+                        id TEXT PRIMARY KEY,
+                        email TEXT UNIQUE,
+                        password_hash TEXT,
+                        name TEXT,
+                        avatar TEXT,
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                    )
+                """)
+                await conn.execute("""
+                    CREATE TABLE IF NOT EXISTS threads (
+                        id TEXT PRIMARY KEY,
+                        title TEXT,
+                        user_id TEXT,
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                    )
+                """)
             app.state.db_conn = None   # not used in postgres mode
             app.state.db_type = "postgres"
             print("[Startup] Agent initialized with AsyncPostgresSaver")
@@ -157,8 +158,7 @@ async def db_execute(sql: str, params: tuple = ()):
     """Execute a write query."""
     if app.state.db_type == "postgres":
         async with app.state.db_pool.connection() as conn:
-            async with conn.transaction():
-                await conn.execute(_pg_query(sql), params)
+            await conn.execute(_pg_query(sql), params)
     elif app.state.db_conn:
         await app.state.db_conn.execute(sql, params)
 
@@ -171,8 +171,9 @@ async def db_fetchall(sql: str, params: tuple = ()) -> list:
     """Execute a SELECT and return all rows."""
     if app.state.db_type == "postgres":
         async with app.state.db_pool.connection() as conn:
-            cursor = await conn.execute(_pg_query(sql), params)
-            return await cursor.fetchall()
+            async with conn.cursor(row_factory=tuple_row) as cursor:
+                await cursor.execute(_pg_query(sql), params)
+                return await cursor.fetchall()
     elif app.state.db_conn:
         async with app.state.db_conn.execute(sql, params) as cursor:
             return await cursor.fetchall()
@@ -182,8 +183,9 @@ async def db_fetchone(sql: str, params: tuple = ()):
     """Execute a SELECT and return one row."""
     if app.state.db_type == "postgres":
         async with app.state.db_pool.connection() as conn:
-            cursor = await conn.execute(_pg_query(sql), params)
-            return await cursor.fetchone()
+            async with conn.cursor(row_factory=tuple_row) as cursor:
+                await cursor.execute(_pg_query(sql), params)
+                return await cursor.fetchone()
     elif app.state.db_conn:
         async with app.state.db_conn.execute(sql, params) as cursor:
             return await cursor.fetchone()
