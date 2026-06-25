@@ -398,7 +398,7 @@ async def chat_endpoint(request: ChatRequest):
 
     return StreamingResponse(
         event_generator(), 
-        media_type="text/plain",
+        media_type="text/event-stream",
         headers={
             "X-Accel-Buffering": "no",
             "Cache-Control": "no-cache",
