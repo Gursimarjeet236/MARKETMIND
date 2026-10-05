@@ -140,7 +140,7 @@ tools = [
 # --------------------------------
 
 chat_model = ChatGroq(
-    model="llama-3.3-70b-versatile",
+    model=os.getenv("GROQ_MODEL", "openai/gpt-oss-120b"),
     temperature=0,
     streaming=True
 )
